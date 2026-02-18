@@ -1,51 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const neo4j = require("neo4j-driver");
-require("dotenv").config();
 
-// 🔹 Neo4j connection - add verification
-console.log("\n" + "=".repeat(50));
-console.log("🔌 Initializing Neo4j Connection...");
-console.log("=".repeat(50));
-console.log("🔌 Neo4j URI:", process.env.NEO4J_URI ? "✓ Set" : "✗ Missing");
-console.log("🔌 Neo4j USER:", process.env.NEO4J_USER ? "✓ Set" : "✗ Missing");
-console.log("🔌 Neo4j PASSWORD:", process.env.NEO4J_PASSWORD ? "✓ Set" : "✗ Missing");
-
-// Create driver
-let driver;
-try {
-  driver = neo4j.driver(
-    process.env.NEO4J_URI,
-    neo4j.auth.basic(
-      process.env.NEO4J_USER,
-      process.env.NEO4J_PASSWORD
-    ),
-    {
-      maxConnectionLifetime: 3 * 60 * 60 * 1000, // 3 hours
-      maxConnectionPoolSize: 50,
-      connectionAcquisitionTimeout: 2 * 60 * 1000 // 2 minutes
-    }
-  );
-
-  // Test connection immediately
-  (async () => {
-    try {
-      const session = driver.session();
-      const result = await session.run("RETURN 1 as test");
-      console.log("✅ Neo4j connection test successful");
-      await session.close();
-    } catch (err) {
-      console.error("❌ Neo4j connection failed:", err.message);
-      console.error("❌ Please check:");
-      console.error("   1. Is Neo4j running?");
-      console.error("   2. Are credentials correct?");
-      console.error("   3. Is bolt://localhost:7687 accessible?");
-    }
-  })();
-} catch (err) {
-  console.error("❌ Failed to create Neo4j driver:", err.message);
-  process.exit(1);
-}
+// Import the shared driver helper
+const getDriver = require("../lib/neo4j");
 
 /**
  * =================================================
@@ -54,6 +11,9 @@ try {
  */
 router.get("/test", async (req, res) => {
   console.log("\n📡 GET /api/demand/test - Called");
+  
+  // Get driver and create session
+  const driver = getDriver();
   const session = driver.session();
   
   try {
@@ -90,6 +50,9 @@ router.get("/test", async (req, res) => {
  */
 router.get("/", async (req, res) => {
   console.log("\n📡 GET /api/demand - Fetching all demands");
+  
+  // Get driver and create session
+  const driver = getDriver();
   const session = driver.session();
 
   try {
@@ -102,9 +65,6 @@ router.get("/", async (req, res) => {
     
     const demands = result.records.map(r => {
       const d = r.get("d").properties;
-      Object.keys(d).forEach(k => {
-        if (neo4j.isInt(d[k])) d[k] = d[k].toNumber();
-      });
       return d;
     });
 
@@ -112,7 +72,6 @@ router.get("/", async (req, res) => {
     res.json(demands);
   } catch (err) {
     console.error("❌ Error fetching demands:", err.message);
-    console.error("❌ Stack trace:", err.stack);
     res.status(500).json({ 
       message: "Failed to fetch demands",
       error: err.message 
@@ -129,6 +88,9 @@ router.get("/", async (req, res) => {
  */
 router.get("/:id", async (req, res) => {
   console.log(`\n📡 GET /api/demand/${req.params.id} - Fetching demand by ID`);
+  
+  // Get driver and create session
+  const driver = getDriver();
   const session = driver.session();
   const id = Number(req.params.id);
 
@@ -164,6 +126,9 @@ router.get("/:id", async (req, res) => {
  */
 router.put("/:id", async (req, res) => {
   console.log(`\n📡 PUT /api/demand/${req.params.id} - Updating demand`);
+  
+  // Get driver and create session
+  const driver = getDriver();
   const session = driver.session();
   const id = Number(req.params.id);
 
@@ -190,7 +155,6 @@ router.put("/:id", async (req, res) => {
     });
   } catch (err) {
     console.error(`❌ Error updating demand ${id}:`, err.message);
-    console.error("❌ Stack trace:", err.stack);
     res.status(500).json({ 
       message: "Failed to update demand",
       error: err.message 
@@ -202,10 +166,14 @@ router.put("/:id", async (req, res) => {
 
 /**
  * =================================================
- * POST – Create Demand (AUTO ID) - DEBUG VERSION
+ * POST – Create Demand
  * =================================================
  */
 router.post("/", async (req, res) => {
+  console.log("\n📡 POST /api/demand - Creating new demand");
+  
+  // Get driver and create session
+  const driver = getDriver();
   const session = driver.session();
 
   try {
@@ -213,7 +181,10 @@ router.post("/", async (req, res) => {
     const idResult = await session.run(
       "MATCH (d:Demand) RETURN coalesce(MAX(d.id), 0) + 1 AS nextId"
     );
-    const id = idResult.records[0].get("nextId");
+    
+    // Handle Neo4j integer properly
+    const nextIdRecord = idResult.records[0].get("nextId");
+    const id = nextIdRecord.low !== undefined ? nextIdRecord.toNumber() : Number(nextIdRecord);
 
     const demandData = {
       id,
@@ -244,6 +215,8 @@ router.post("/", async (req, res) => {
 
     const created = result.records[0].get("d").properties;
 
+    console.log(`✅ Demand created successfully with ID: ${id}`);
+
     res.status(201).json({
       success: true,
       message: "Demand created successfully",
@@ -269,6 +242,9 @@ router.post("/", async (req, res) => {
  */
 router.delete("/:id", async (req, res) => {
   console.log(`\n📡 DELETE /api/demand/${req.params.id} - Deleting demand`);
+  
+  // Get driver and create session
+  const driver = getDriver();
   const session = driver.session();
   const id = Number(req.params.id);
 
