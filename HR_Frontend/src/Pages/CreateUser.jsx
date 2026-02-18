@@ -23,7 +23,7 @@ const CreateUser = () => {
 
   const checkBackendStatus = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/users", {
+      const response = await fetch("https://recruitment-hiring-portal.vercel.app/api/users", {
         method: "HEAD",
       });
       setApiStatus({ checking: false, online: response.ok });
@@ -42,7 +42,7 @@ const CreateUser = () => {
   const fetchUsers = async () => {
     try {
       console.log("📡 Fetching users from API...");
-      const response = await fetch("http://localhost:5000/api/users");
+      const response = await fetch("https://recruitment-hiring-portal.vercel.app/api/users");
       console.log("📡 Response status:", response.status);
       
       // Check if response is OK
@@ -87,7 +87,7 @@ const CreateUser = () => {
     setMessage({ type: "", text: "" });
 
     try {
-      const response = await fetch("http://localhost:5000/api/users", {
+      const response = await fetch("https://recruitment-hiring-portal.vercel.app/api/users", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -139,7 +139,7 @@ const CreateUser = () => {
     setMessage({ type: "", text: "" });
 
     try {
-      const response = await fetch(`http://localhost:5000/api/users/${editingUser.username}`, {
+      const response = await fetch(`https://recruitment-hiring-portal.vercel.app/api/users/${editingUser.username}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -183,7 +183,7 @@ const CreateUser = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/api/users/${username}`, {
+      const response = await fetch(`https://recruitment-hiring-portal.vercel.app/api/users/${username}`, {
         method: "DELETE",
       });
 
