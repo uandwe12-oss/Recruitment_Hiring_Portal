@@ -1,13 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcrypt");
-const neo4j = require("neo4j-driver");
-require("dotenv").config();
 
-const driver = neo4j.driver(
-  process.env.NEO4J_URI,
-  neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASSWORD)
-);
+// Import the shared driver helper
+const getDriver = require("../lib/neo4j");
 
 /**
  * =================================================
@@ -15,10 +11,14 @@ const driver = neo4j.driver(
  * =================================================
  */
 router.get("/", async (req, res) => {
+  console.log("\n📡 GET /api/users - Fetching all users");
+  
+  // Get driver and create session
+  const driver = getDriver();
   const session = driver.session();
 
   try {
-    console.log("📡 Fetching all users...");
+    console.log("🔍 Executing Neo4j query...");
     
     const result = await session.run(
       `MATCH (u:User)
@@ -67,6 +67,11 @@ router.get("/", async (req, res) => {
  * =================================================
  */
 router.post("/", async (req, res) => {
+  console.log("\n📡 POST /api/users - Creating new user");
+  console.log("Request body:", { ...req.body, password: "[HIDDEN]" });
+  
+  // Get driver and create session
+  const driver = getDriver();
   const session = driver.session();
   
   try {
@@ -86,6 +91,7 @@ router.post("/", async (req, res) => {
     );
 
     if (checkResult.records.length > 0) {
+      console.log(`❌ Username already exists: ${username}`);
       return res.status(400).json({ 
         success: false,
         message: "Username already exists" 
@@ -113,15 +119,20 @@ router.post("/", async (req, res) => {
       }
     );
 
-    const createdUser = result.records[0].toObject();
+    const createdUser = result.records[0];
+    const createdUsername = createdUser.get("username");
+    const createdRole = createdUser.get("role");
+    const createdDate = createdUser.get("createdAt");
+
+    console.log(`✅ User created successfully: ${createdUsername}`);
 
     res.status(201).json({
       success: true,
       message: "User created successfully",
       user: {
-        username: createdUser.username,
-        role: createdUser.role,
-        createdAt: createdUser.createdAt ? createdUser.createdAt.toString() : null
+        username: createdUsername,
+        role: createdRole,
+        createdAt: createdDate ? createdDate.toString() : null
       }
     });
 
@@ -143,12 +154,16 @@ router.post("/", async (req, res) => {
  * =================================================
  */
 router.put("/:username", async (req, res) => {
+  console.log(`\n📡 PUT /api/users/${req.params.username} - Updating user`);
+  
+  // Get driver and create session
+  const driver = getDriver();
   const session = driver.session();
   const { username } = req.params;
   const { role } = req.body;
 
   try {
-    console.log(`📡 Updating user: ${username} to role: ${role}`);
+    console.log(`📝 Updating user: ${username} to role: ${role}`);
 
     if (!role) {
       return res.status(400).json({ 
@@ -181,17 +196,20 @@ router.put("/:username", async (req, res) => {
       { username, role }
     );
 
-    const updatedUser = result.records[0].toObject();
+    const updatedUser = result.records[0];
+    const updatedUsername = updatedUser.get("username");
+    const updatedRole = updatedUser.get("role");
+    const updatedDate = updatedUser.get("createdAt");
 
-    console.log(`✅ User ${username} updated successfully`);
+    console.log(`✅ User ${username} updated successfully to role: ${updatedRole}`);
 
     res.json({
       success: true,
       message: "User updated successfully",
       user: {
-        username: updatedUser.username,
-        role: updatedUser.role,
-        createdAt: updatedUser.createdAt ? updatedUser.createdAt.toString() : null
+        username: updatedUsername,
+        role: updatedRole,
+        createdAt: updatedDate ? updatedDate.toString() : null
       }
     });
 
@@ -213,11 +231,15 @@ router.put("/:username", async (req, res) => {
  * =================================================
  */
 router.delete("/:username", async (req, res) => {
+  console.log(`\n📡 DELETE /api/users/${req.params.username} - Deleting user`);
+  
+  // Get driver and create session
+  const driver = getDriver();
   const session = driver.session();
   const { username } = req.params;
 
   try {
-    console.log(`📡 Deleting user: ${username}`);
+    console.log(`🔍 Checking if user ${username} exists`);
 
     // Check if user exists
     const checkResult = await session.run(
@@ -233,8 +255,8 @@ router.delete("/:username", async (req, res) => {
       });
     }
 
-    // Prevent deleting yourself (optional - can remove if you want)
-    // You can add this check if needed
+    // Optional: Prevent deleting yourself
+    // You can add a check here if you want to prevent deleting the current user
 
     // Delete user
     await session.run(
