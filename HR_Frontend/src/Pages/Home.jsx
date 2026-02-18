@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import Header from "../Components/Header";
+import Header from "../components/Header";
 import bgImage from "../assets/Images/back.png";
 import {
   Briefcase,
