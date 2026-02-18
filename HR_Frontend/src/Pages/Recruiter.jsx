@@ -100,7 +100,7 @@ const Recruiter = () => {
   const fetchAllCandidates = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5000/api/candidates');
+      const response = await axios.get('https://recruitment-hiring-portal.vercel.app/api/candidates');
       if (response.data.success) {
         setCandidates(response.data.data);
         setDisplayedCandidates(response.data.data);
@@ -126,7 +126,7 @@ const Recruiter = () => {
   // Fetch skills data from API
   const fetchSkillsData = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/candidates/skills');
+      const response = await axios.get('https://recruitment-hiring-portal.vercel.app/api/candidates/skills');
       if (response.data.success) {
         setSkillGroups(response.data.data);
         setTotalSkills(response.data.totalSkills);
@@ -244,7 +244,7 @@ const Recruiter = () => {
 
     try {
       setFilterLoading(true);
-      const response = await axios.get(`http://localhost:5000/api/candidates/skill/${encodeURIComponent(skill)}`);
+      const response = await axios.get(`https://recruitment-hiring-portal.vercel.app/api/candidates/skill/${encodeURIComponent(skill)}`);
       
       if (response.data.success) {
         setDisplayedCandidates(response.data.data);
@@ -388,7 +388,7 @@ const Recruiter = () => {
       setSubmitLoading(true);
       setFormErrors({});
       
-      const response = await axios.post('http://localhost:5000/api/candidates', newProfile);
+      const response = await axios.post('https://recruitment-hiring-portal.vercel.app/api/candidates', newProfile);
       
       if (response.data.success) {
         setSuccessMessage("Profile added successfully!");
