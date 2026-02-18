@@ -1,8 +1,13 @@
 const express = require("express");
 const router = express.Router();
-const neo4j = require("neo4j-driver");
-require("dotenv").config();
- 
+
+// REMOVED: require("dotenv").config(); - This will be handled in server.js only
+// REMOVED: const neo4j = require("neo4j-driver"); - Now using the shared driver
+// REMOVED: All top-level Neo4j driver creation and connection testing
+
+// Import the shared driver helper
+const getDriver = require("../lib/neo4j");
+
 // Add CORS headers to all routes in this router
 router.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', 'http://localhost:5173');
@@ -17,51 +22,10 @@ router.use((req, res, next) => {
  
   next();
 });
- 
-// Neo4j connection
-console.log("\n" + "=".repeat(50));
-console.log("🔌 Initializing Neo4j Connection for Candidates...");
-console.log("=".repeat(50));
- 
-let driver;
-try {
-  const uri = process.env.NEO4J_URI || 'bolt://localhost:7687';
-  const user = process.env.NEO4J_USER || 'neo4j';
-  const password = process.env.NEO4J_PASSWORD || 'password';
- 
-  console.log(`📡 Connecting to Neo4j at: ${uri}`);
- 
-  driver = neo4j.driver(
-    uri,
-    neo4j.auth.basic(user, password),
-    {
-      maxConnectionLifetime: 3 * 60 * 60 * 1000,
-      maxConnectionPoolSize: 50,
-      connectionAcquisitionTimeout: 2 * 60 * 1000,
-      disableLosslessIntegers: true
-    }
-  );
- 
-  // Test connection
-  (async () => {
-    try {
-      const session = driver.session();
-      const result = await session.run("RETURN 1 as test");
-      console.log("✅ Neo4j connected successfully for Candidates");
-      await session.close();
-    } catch (err) {
-      console.error("❌ Neo4j connection failed:", err.message);
-      console.error("\n🔍 Troubleshooting steps:");
-      console.error("1. Check if Neo4j database is running");
-      console.error("2. Verify credentials in .env file");
-      console.error(`3. Current URI: ${uri}`);
-      console.error("4. Make sure your IP is whitelisted in Neo4j AuraDB");
-    }
-  })();
-} catch (err) {
-  console.error("❌ Failed to create Neo4j driver:", err.message);
-}
- 
+
+// REMOVED: All the Neo4j connection initialization code at the top level
+// REMOVED: The console.log and (async () => {...})() connection test
+
 // Helper function to parse skills
 const parseSkills = (candidate) => {
   if (candidate.skills) {
@@ -77,12 +41,12 @@ const parseSkills = (candidate) => {
   }
   return candidate;
 };
- 
+
 // Helper function to normalize skill string (lowercase, trim)
 const normalizeSkill = (skill) => {
   return skill ? skill.toString().toLowerCase().trim() : '';
 };
- 
+
 /**
  * @swagger
  * /api/candidates:
@@ -95,6 +59,9 @@ const normalizeSkill = (skill) => {
  */
 router.get("/", async (req, res) => {
   console.log("\n📡 GET /api/candidates - Fetching all candidates");
+  
+  // Get driver ONLY when handling the request
+  const driver = getDriver();
   const session = driver.session();
  
   try {
@@ -125,7 +92,7 @@ router.get("/", async (req, res) => {
     await session.close();
   }
 });
- 
+
 /**
  * @swagger
  * /api/candidates/skills:
@@ -138,6 +105,8 @@ router.get("/", async (req, res) => {
  */
 router.get("/skills", async (req, res) => {
   console.log("\n📡 GET /api/candidates/skills - Fetching skills with candidate counts");
+  
+  const driver = getDriver();
   const session = driver.session();
  
   try {
@@ -197,7 +166,7 @@ router.get("/skills", async (req, res) => {
     await session.close();
   }
 });
- 
+
 /**
  * @swagger
  * /api/candidates/skill/{skillName}:
@@ -217,6 +186,8 @@ router.get("/skills", async (req, res) => {
  */
 router.get("/skill/:skillName", async (req, res) => {
   console.log(`\n📡 GET /api/candidates/skill/${req.params.skillName}`);
+  
+  const driver = getDriver();
   const session = driver.session();
   const requestedSkill = req.params.skillName;
   const normalizedRequestedSkill = normalizeSkill(requestedSkill);
@@ -299,7 +270,7 @@ router.get("/skill/:skillName", async (req, res) => {
     await session.close();
   }
 });
- 
+
 /**
  * @swagger
  * /api/candidates/search/skills:
@@ -319,6 +290,8 @@ router.get("/skill/:skillName", async (req, res) => {
  */
 router.get("/search/skills", async (req, res) => {
   console.log(`\n📡 GET /api/candidates/search/skills?q=${req.query.q}`);
+  
+  const driver = getDriver();
   const session = driver.session();
   const searchQuery = req.query.q;
  
@@ -382,7 +355,7 @@ router.get("/search/skills", async (req, res) => {
     await session.close();
   }
 });
- 
+
 /**
  * @swagger
  * /api/candidates/filter/by-skills:
@@ -413,6 +386,7 @@ router.post("/filter/by-skills", async (req, res) => {
   console.log("\n📡 POST /api/candidates/filter/by-skills - Filtering candidates by skills");
   console.log("Request body:", req.body);
  
+  const driver = getDriver();
   const session = driver.session();
   const { skills, matchType = 'ANY' } = req.body;
  
@@ -488,7 +462,7 @@ router.post("/filter/by-skills", async (req, res) => {
     await session.close();
   }
 });
- 
+
 /**
  * @swagger
  * /api/candidates/skill/{skillName}/stats:
@@ -507,6 +481,8 @@ router.post("/filter/by-skills", async (req, res) => {
  */
 router.get("/skill/:skillName/stats", async (req, res) => {
   console.log(`\n📡 GET /api/candidates/skill/${req.params.skillName}/stats`);
+  
+  const driver = getDriver();
   const session = driver.session();
   const requestedSkill = req.params.skillName;
   const normalizedRequestedSkill = normalizeSkill(requestedSkill);
@@ -580,12 +556,14 @@ router.get("/skill/:skillName/stats", async (req, res) => {
     await session.close();
   }
 });
- 
+
 // Keep all your existing specific skill endpoints (/iot, /python, /java, etc.)
 // but update them to use the normalized filtering
- 
+
 router.get("/iot", async (req, res) => {
   console.log("\n📡 GET /api/candidates/iot - Fetching IoT candidates");
+  
+  const driver = getDriver();
   const session = driver.session();
  
   try {
@@ -624,9 +602,11 @@ router.get("/iot", async (req, res) => {
     await session.close();
   }
 });
- 
+
 router.get("/python", async (req, res) => {
   console.log("\n📡 GET /api/candidates/python - Fetching Python candidates");
+  
+  const driver = getDriver();
   const session = driver.session();
  
   try {
@@ -665,9 +645,11 @@ router.get("/python", async (req, res) => {
     await session.close();
   }
 });
- 
+
 router.get("/java", async (req, res) => {
   console.log("\n📡 GET /api/candidates/java - Fetching Java candidates");
+  
+  const driver = getDriver();
   const session = driver.session();
  
   try {
@@ -706,9 +688,11 @@ router.get("/java", async (req, res) => {
     await session.close();
   }
 });
- 
+
 router.get("/embedded", async (req, res) => {
   console.log("\n📡 GET /api/candidates/embedded - Fetching Embedded Systems candidates");
+  
+  const driver = getDriver();
   const session = driver.session();
  
   try {
@@ -747,9 +731,11 @@ router.get("/embedded", async (req, res) => {
     await session.close();
   }
 });
- 
+
 router.get("/pcb-design", async (req, res) => {
   console.log("\n📡 GET /api/candidates/pcb-design - Fetching PCB Design candidates");
+  
+  const driver = getDriver();
   const session = driver.session();
  
   try {
@@ -788,10 +774,12 @@ router.get("/pcb-design", async (req, res) => {
     await session.close();
   }
 });
- 
+
 // GET candidate by ID
 router.get("/:id", async (req, res) => {
   console.log(`\n📡 GET /api/candidates/${req.params.id}`);
+  
+  const driver = getDriver();
   const session = driver.session();
   const id = parseInt(req.params.id);
  
@@ -826,13 +814,13 @@ router.get("/:id", async (req, res) => {
     await session.close();
   }
 });
- 
+
 // POST create new candidate
- 
 router.post("/", async (req, res) => {
   console.log("\n📡 POST /api/candidates - Creating new candidate");
   console.log("Request body:", req.body);
  
+  const driver = getDriver();
   const session = driver.session();
  
   try {
@@ -926,9 +914,12 @@ router.post("/", async (req, res) => {
     await session.close();
   }
 });
+
 // PUT update candidate
 router.put("/:id", async (req, res) => {
   console.log(`\n📡 PUT /api/candidates/${req.params.id}`);
+  
+  const driver = getDriver();
   const session = driver.session();
   const id = parseInt(req.params.id);
  
@@ -977,10 +968,12 @@ router.put("/:id", async (req, res) => {
     await session.close();
   }
 });
- 
+
 // DELETE candidate
 router.delete("/:id", async (req, res) => {
   console.log(`\n📡 DELETE /api/candidates/${req.params.id}`);
+  
+  const driver = getDriver();
   const session = driver.session();
   const id = parseInt(req.params.id);
  
@@ -1014,7 +1007,7 @@ router.delete("/:id", async (req, res) => {
     await session.close();
   }
 });
- 
+
 // Helper function to calculate average experience
 const calculateAverageExperience = (candidates) => {
   if (candidates.length === 0) return 0;
@@ -1026,7 +1019,7 @@ const calculateAverageExperience = (candidates) => {
  
   return (total / candidates.length).toFixed(1);
 };
- 
+
 // Helper function to get common locations
 const getCommonLocations = (candidates) => {
   const locations = {};
@@ -1042,7 +1035,7 @@ const getCommonLocations = (candidates) => {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 };
- 
+
 // Helper function to get visa status distribution
 const getVisaStatusDistribution = (candidates) => {
   const visaStatus = {};
@@ -1056,5 +1049,5 @@ const getVisaStatusDistribution = (candidates) => {
     .map(([status, count]) => ({ status, count }))
     .sort((a, b) => b.count - a.count);
 };
- 
+
 module.exports = router;
