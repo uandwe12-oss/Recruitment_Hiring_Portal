@@ -1,0 +1,38 @@
+Demand Dashboard
+
+1.Search & short button short and change the design
+2.Export button add button 
+3.Popup design change
+4.edit button submit button in the popup
+5.canditate button
+6.Admin can able to add & edit the details 
+7.search is not there invalid 
+
+Recuriter Page
+
+1.profile short based on the skill
+2.add profile to all
+---same profile should not need to repeat mobile number and email id 
+```location india us visa details passport this details need to get
+3.search form follow the mail
+4.email and WhatsApp for the profile 
+
+Home page
+
+
+header file 
+-Home
+-Demand
+-recruiter
+
+
+Login page 
+
+-product name and logo
+
+
+
+date
+week
+experien
+interiver 1,2
