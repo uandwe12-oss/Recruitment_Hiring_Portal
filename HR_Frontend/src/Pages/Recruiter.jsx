@@ -337,10 +337,14 @@ const fetchSkillsData = async () => {
   const fetchAllCandidates = async () => {
     try {
       setLoading(true);
+>>>>>>> main
       setError(null);
       const response = await axios.get('http://localhost:5000/api/candidates/all');
       console.log("Candidates API response:", response.data);
       
+=======
+      const response = await axios.get('https://recruitment-hiring-portal.vercel.app/api/candidates');
+>>>>>>> 2e9297ab124dd1a1ef480673d9a4773975fb2fcb
       if (response.data.success) {
         // Process each candidate and filter out nulls
         const processedCandidates = response.data.data
@@ -375,6 +379,7 @@ const fetchSkillsData = async () => {
     }
   };
 
+>>>>>>> main
 // Check if email exists (excluding current candidate)
 const checkEmailExists = async (email, excludeId = null) => {
   try {
@@ -405,6 +410,18 @@ const checkMobileExists = async (mobile, excludeId = null) => {
   const handleViewDetails = (candidate, e) => {
     if (e) {
       e.stopPropagation();
+=======
+  // Fetch skills data from API
+  const fetchSkillsData = async () => {
+    try {
+      const response = await axios.get('https://recruitment-hiring-portal.vercel.app/api/candidates/skills');
+      if (response.data.success) {
+        setSkillGroups(response.data.data);
+        setTotalSkills(response.data.totalSkills);
+      }
+    } catch (err) {
+      console.error('Error fetching skills data:', err);
+>>>>>>> 2e9297ab124dd1a1ef480673d9a4773975fb2fcb
     }
     console.log("Viewing candidate:", candidate);
     setSelectedCandidate(candidate);
@@ -810,9 +827,13 @@ const handleUpdateProfile = async () => {
     }
 
     try {
-      setDeleteLoading(true);
+>>>>>>> main      setDeleteLoading(true);
       
       const response = await axios.delete(`http://localhost:5000/api/candidates/${deletingCandidateId}`);
+=======
+      setFilterLoading(true);
+      const response = await axios.get(`https://recruitment-hiring-portal.vercel.app/api/candidates/skill/${encodeURIComponent(skill)}`);
+>>>>>>> 2e9297ab124dd1a1ef480673d9a4773975fb2fcb
       
       if (response.data.success) {
         setSuccessMessage("Profile deleted successfully!");
@@ -1294,6 +1315,7 @@ const handleAddProfile = async () => {
     return;
   }
 
+>>>>>>> main
   try {
     setSubmitLoading(true);
     setFormErrors({});
@@ -1339,6 +1361,45 @@ const handleAddProfile = async () => {
     const response = await axios.post('http://localhost:5000/api/candidates', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
+=======
+    try {
+      setSubmitLoading(true);
+      setFormErrors({});
+      
+      const response = await axios.post('https://recruitment-hiring-portal.vercel.app/api/candidates', newProfile);
+      
+      if (response.data.success) {
+        setSuccessMessage("Profile added successfully!");
+        
+        await fetchAllCandidates();
+        await fetchSkillsData();
+        
+        if (selectedSkill !== "All") {
+          await filterCandidatesBySkill(selectedSkill);
+        }
+        
+        setTimeout(() => {
+          setShowAddProfile(false);
+          setSuccessMessage("");
+          setNewProfile({
+            name: "",
+            email: "",
+            mobile: "",
+            location: "",
+            visaStatus: "",
+            passport: "",
+            experience: "",
+            currentRole: "",
+            skills: [],
+            status: "Available",
+            noticePeriod: "",
+            salary: "",
+            education: "",
+            bio: ""
+          });
+          setSkillInput("");
+        }, 1000);
+>>>>>>> 2e9297ab124dd1a1ef480673d9a4773975fb2fcb
       }
     });
     
