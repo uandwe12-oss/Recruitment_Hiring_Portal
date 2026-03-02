@@ -1,355 +1,579 @@
 const express = require("express");
 const router = express.Router();
+const neo4j = require("neo4j-driver");
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const { google } = require('googleapis');
+const { Readable } = require('stream');
+require("dotenv").config();
 
-// REMOVED: require("dotenv").config(); - This will be handled in server.js only
-// REMOVED: const neo4j = require("neo4j-driver"); - Now using the shared driver
-// REMOVED: All top-level Neo4j driver creation and connection testing
+// ============================================
+// GOOGLE DRIVE CONFIGURATION
+// ============================================
+const DRIVE_FOLDER_ID = '1wIQXwyPPYyfXWJ35TsmDByeg4FTxyNle'; // Your folder ID
+const TOKEN_PATH = path.join(__dirname, '../config/token.json');
+const CREDENTIALS_PATH = path.join(__dirname, '../config/credentials.json');
 
-// Import the shared driver helper
-const getDriver = require("../lib/neo4j");
+// Configure multer for memory storage (for Google Drive)
+const memoryStorage = multer.memoryStorage();
 
-// Add CORS headers to all routes in this router
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype === 'application/pdf') {
+    cb(null, true);
+  } else {
+    cb(new Error('Only PDF files are allowed'), false);
+  }
+};
+
+const upload = multer({
+  storage: memoryStorage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
+// Local upload directory for fallback
+const uploadDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+  console.log('📁 Created uploads directory at:', uploadDir);
+}
+
+// ============================================
+// GOOGLE DRIVE HELPER FUNCTIONS
+// ============================================
+
+async function authorize() {
+  try {
+    if (!fs.existsSync(CREDENTIALS_PATH)) {
+      console.warn('⚠️ Google Drive credentials not found. Local storage will be used as fallback.');
+      return null;
+    }
+
+    const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
+    const { client_secret, client_id, redirect_uris } = credentials.installed || credentials.web;
+    const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+
+    if (fs.existsSync(TOKEN_PATH)) {
+      const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
+      oAuth2Client.setCredentials(token);
+      return oAuth2Client;
+    } else {
+      console.warn('⚠️ Google Drive token not found. Local storage will be used as fallback.');
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ Error in authorize:', error.message);
+    return null;
+  }
+}
+// Add this function near your other Google Drive helper functions
+const deleteFromGoogleDrive = async (fileId) => {
+  try {
+    console.log(`🗑️ Deleting file from Google Drive with ID: ${fileId}`);
+    
+    const auth = await authorize();
+    if (!auth) {
+      console.log('⚠️ Google Drive not configured, skipping deletion');
+      return false;
+    }
+    
+    const drive = google.drive({ version: 'v3', auth });
+    
+    await drive.files.delete({
+      fileId: fileId
+    });
+    
+    console.log('✅ File deleted from Google Drive successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ Google Drive delete error:', error);
+    return false;
+  }
+};
+const uploadToGoogleDrive = async (file, candidateName) => {
+  try {
+    console.log('📤 Uploading to Google Drive...');
+    
+    const auth = await authorize();
+    if (!auth) {
+      console.log('⚠️ Google Drive not configured, using local storage only');
+      return null;
+    }
+    
+    const drive = google.drive({ version: 'v3', auth });
+    
+    const bufferStream = new Readable();
+    bufferStream.push(file.buffer);
+    bufferStream.push(null);
+    
+    const sanitizedName = candidateName.replace(/[^a-zA-Z0-9]/g, '_');
+    const timestamp = Date.now();
+    const fileName = `${sanitizedName}_${timestamp}_${file.originalname}`;
+    
+    const fileMetadata = {
+      name: fileName,
+      parents: [DRIVE_FOLDER_ID],
+      description: `Resume for ${candidateName} uploaded on ${new Date().toISOString()}`
+    };
+    
+    const media = {
+      mimeType: 'application/pdf',
+      body: bufferStream
+    };
+    
+    const response = await drive.files.create({
+      resource: fileMetadata,
+      media: media,
+      fields: 'id, name, webViewLink, size, createdTime'
+    });
+    
+    // Make the file publicly accessible
+    await drive.permissions.create({
+      fileId: response.data.id,
+      requestBody: {
+        role: 'reader',
+        type: 'anyone'
+      }
+    });
+    
+    console.log('✅ File uploaded to Google Drive with ID:', response.data.id);
+    
+    return {
+      googleDriveFileId: response.data.id,
+      googleDriveViewLink: `https://drive.google.com/file/d/${response.data.id}/preview`,
+      googleDriveDownloadLink: `https://drive.google.com/uc?export=download&id=${response.data.id}`,
+      fileName: response.data.name,
+      fileSize: response.data.size
+    };
+    
+  } catch (error) {
+    console.error('❌ Google Drive upload error:', error);
+    return null;
+  }
+};
+
+const saveFileLocally = (file, candidateName) => {
+  try {
+    console.log('📁 Saving file locally as fallback...');
+    
+    const timestamp = Date.now();
+    const uniqueSuffix = timestamp + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    const filename = 'resume-' + uniqueSuffix + ext;
+    const filePath = path.join(uploadDir, filename);
+    
+    fs.writeFileSync(filePath, file.buffer);
+    console.log('✅ File saved locally at:', filePath);
+    
+    return {
+      resumePath: `/uploads/${filename}`,
+      fileName: filename,
+      localPath: filePath
+    };
+  } catch (error) {
+    console.error('❌ Local file save error:', error);
+    return null;
+  }
+};
+
+// ============================================
+// NEO4J CONNECTION
+// ============================================
+console.log("\n" + "=".repeat(50));
+console.log("🔌 Initializing Neo4j Connection for Candidate Profiles...");
+console.log("=".repeat(50));
+
+let driver;
+try {
+  const uri = process.env.NEO4J_URI || 'neo4j+s://48046602.databases.neo4j.io';
+  const user = process.env.NEO4J_USER || 'neo4j';
+  const password = process.env.NEO4J_PASSWORD || '5CFMv9N5rc4lJgSnXJm68eYpRw4DynDCov-0Fyy3m1Q';
+  
+  console.log(`📡 Connecting to Neo4j at: ${uri}`);
+  
+  driver = neo4j.driver(
+    uri,
+    neo4j.auth.basic(user, password),
+    {
+      maxConnectionLifetime: 3 * 60 * 60 * 1000,
+      maxConnectionPoolSize: 50,
+      connectionAcquisitionTimeout: 2 * 60 * 1000,
+      disableLosslessIntegers: true
+    }
+  );
+
+  // Test connection
+  (async () => {
+    try {
+      const session = driver.session();
+      const result = await session.run("MATCH (c:Candidate_Profile) RETURN count(c) as count");
+      const count = toNumber(result.records[0].get('count'));
+      console.log(`✅ Neo4j connected successfully. Found ${count} Candidate_Profile nodes`);
+      await session.close();
+    } catch (err) {
+      console.error("❌ Neo4j connection failed:", err.message);
+    }
+  })();
+} catch (err) {
+  console.error("❌ Failed to create Neo4j driver:", err.message);
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+const toNumber = (value) => {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'object' && value.low !== undefined) {
+    return value.toNumber ? value.toNumber() : value.low;
+  }
+  // Handle string numbers
+  if (typeof value === 'string' && !isNaN(parseFloat(value))) {
+    return parseFloat(value);
+  }
+  return value;
+};
+
+// Add CORS headers
 router.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', 'http://localhost:5173');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Credentials', 'true');
- 
-  // Handle preflight requests
+  
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
- 
+  
   next();
 });
 
-// REMOVED: All the Neo4j connection initialization code at the top level
-// REMOVED: The console.log and (async () => {...})() connection test
+router.use((req, res, next) => {
+  console.log(`🔍 Route accessed: ${req.method} ${req.originalUrl}`);
+  next();
+});
 
-// Helper function to parse skills
-const parseSkills = (candidate) => {
-  if (candidate.skills) {
-    if (typeof candidate.skills === 'string') {
-      try {
-        candidate.skills = JSON.parse(candidate.skills);
-      } catch {
-        candidate.skills = candidate.skills.split(',').map(s => s.trim());
-      }
+// Extract skills array from profile
+const extractSkillsArray = (profile) => {
+  if (!profile.keySkills) return [];
+  
+  if (Array.isArray(profile.keySkills)) {
+    return profile.keySkills;
+  } else if (typeof profile.keySkills === 'string') {
+    try {
+      const parsed = JSON.parse(profile.keySkills);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return profile.keySkills.split(',').map(s => s.trim()).filter(s => s);
     }
-  } else {
-    candidate.skills = [];
   }
-  return candidate;
+  return [];
 };
 
-// Helper function to normalize skill string (lowercase, trim)
-const normalizeSkill = (skill) => {
-  return skill ? skill.toString().toLowerCase().trim() : '';
+// Parse experience string to number (in years)
+const parseExperience = (expString) => {
+  if (!expString) return 0;
+  
+  // If it's already a number
+  if (typeof expString === 'number') return expString;
+  
+  // Try to extract number from string (e.g., "5 years", "3.5 yrs", "2")
+  const match = expString.toString().match(/(\d+(\.\d+)?)/);
+  return match ? parseFloat(match[0]) : 0;
 };
+
+// Normalize field names
+const normalizeProfileFields = (profile) => {
+  const normalized = {};
+  
+  for (const [key, value] of Object.entries(profile)) {
+    const lowerKey = key.toLowerCase().replace(/\s+/g, '');
+    
+    if (key === 'Candidate Name' || key === 'candidateName' || key === 'name') {
+      normalized.name = value;
+    } else if (key === 'Email' || key === 'email') {
+      normalized.email = value;
+    } else if (key === 'Mobile No' || key === 'mobileNo' || key === 'mobile') {
+      normalized.mobile = value;
+    } else if (key === 'Experience' || key === 'experience') {
+      normalized.experience = value;
+      normalized.experienceYears = parseExperience(value);
+    } else if (key === 'Current Org' || key === 'currentOrg') {
+      normalized.currentOrg = value;
+    } else if (key === 'Current CTC' || key === 'currentCTC') {
+      normalized.currentCTC = value;
+    } else if (key === 'Expected CTC' || key === 'expectedCTC') {
+      normalized.expectedCTC = value;
+    } else if (key === 'Notice Period in days' || key === 'noticePeriod') {
+      normalized.noticePeriod = value;
+    } else if (key === 'Profiles sourced by' || key === 'profileSourcedBy') {
+      normalized.profileSourcedBy = value;
+    } else if (key === 'Client Name' || key === 'clientName') {
+      normalized.clientName = value;
+    } else if (key === 'Profile submission date' || key === 'profileSubmissionDate') {
+      normalized.profileSubmissionDate = value;
+    } else if (key === 'Key Skills' || key === 'keySkills') {
+      normalized.keySkills = value;
+    } else if (key === 'Can_ID' || key === 'canId' || key === 'Can ID') {
+      normalized.canId = toNumber(value);
+    } else if (key === 'Visa type' || key === 'visaType') {
+      normalized.visaType = value;
+    } else if (key === 'resumePath') {
+      normalized.resumePath = value;
+    } else if (key === 'googleDriveFileId') {
+      normalized.googleDriveFileId = value;
+    } else if (key === 'googleDriveViewLink') {
+      normalized.googleDriveViewLink = value;
+    } else if (key === 'googleDriveDownloadLink') {
+      normalized.googleDriveDownloadLink = value;
+    } else if (key === 'createdAt') {
+      normalized.createdAt = value;
+    } else if (key === 'updatedAt') {
+      normalized.updatedAt = value;
+    } else if (key === 'id') {
+      normalized.id = toNumber(value);
+    } else {
+      normalized[key] = value;
+    }
+  }
+  
+  return normalized;
+};
+
+// Format profile for response
+const formatProfileForResponse = (profile) => {
+  const normalized = normalizeProfileFields(profile);
+  
+  // Ensure skills is always an array
+  normalized.keySkills = extractSkillsArray(normalized);
+  
+  return normalized;
+};
+
+// ============================================
+// SWAGGER COMPONENTS SCHEMAS
+// ============================================
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     CandidateProfile:
+ *       type: object
+ *       properties:
+ *         canId:
+ *           type: integer
+ *           description: Candidate ID (Can_ID)
+ *         name:
+ *           type: string
+ *           description: Candidate name
+ *         email:
+ *           type: string
+ *           description: Candidate email
+ *         mobile:
+ *           type: string
+ *           description: Candidate mobile number
+ *         experience:
+ *           type: string
+ *           description: Experience in years
+ *         experienceYears:
+ *           type: number
+ *           description: Experience as numeric value
+ *         currentOrg:
+ *           type: string
+ *           description: Current organization
+ *         currentCTC:
+ *           type: string
+ *           description: Current CTC
+ *         expectedCTC:
+ *           type: string
+ *           description: Expected CTC
+ *         noticePeriod:
+ *           type: string
+ *           description: Notice period in days
+ *         profileSourcedBy:
+ *           type: string
+ *           description: Source of profile
+ *         clientName:
+ *           type: string
+ *           description: Client name
+ *         profileSubmissionDate:
+ *           type: string
+ *           description: Profile submission date
+ *         keySkills:
+ *           type: array
+ *           items:
+ *             type: string
+ *           description: Candidate skills
+ *         visaType:
+ *           type: string
+ *           description: Visa type
+ *         resumePath:
+ *           type: string
+ *           description: Local resume path
+ *         googleDriveFileId:
+ *           type: string
+ *           description: Google Drive file ID
+ *         googleDriveViewLink:
+ *           type: string
+ *           description: Google Drive view link
+ *         googleDriveDownloadLink:
+ *           type: string
+ *           description: Google Drive download link
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *     
+ *     CandidateInput:
+ *       type: object
+ *       required:
+ *         - name
+ *         - email
+ *         - mobile
+ *       properties:
+ *         name:
+ *           type: string
+ *         email:
+ *           type: string
+ *         mobile:
+ *           type: string
+ *         experience:
+ *           type: string
+ *         currentOrg:
+ *           type: string
+ *         currentCTC:
+ *           type: string
+ *         expectedCTC:
+ *           type: string
+ *         noticePeriod:
+ *           type: string
+ *         profileSourcedBy:
+ *           type: string
+ *         clientName:
+ *           type: string
+ *         profileSubmissionDate:
+ *           type: string
+ *         keySkills:
+ *           type: array
+ *           items:
+ *             type: string
+ *         visaType:
+ *           type: string
+ *         resume:
+ *           type: string
+ *           format: binary
+ *     
+ *     ApiResponse:
+ *       type: object
+ *       properties:
+ *         success:
+ *           type: boolean
+ *         message:
+ *           type: string
+ *         data:
+ *           oneOf:
+ *             - type: array
+ *               items:
+ *                 $ref: '#/components/schemas/CandidateProfile'
+ *             - $ref: '#/components/schemas/CandidateProfile'
+ *         count:
+ *           type: integer
+ *         totalCount:
+ *           type: integer
+ *         currentPage:
+ *           type: integer
+ *         totalPages:
+ *           type: integer
+ *         limit:
+ *           type: integer
+ *     
+ *     NextIdResponse:
+ *       type: object
+ *       properties:
+ *         success:
+ *           type: boolean
+ *         nextCanId:
+ *           type: integer
+ *         currentMaxId:
+ *           type: integer
+ */
+
+// ============================================
+// CANDIDATE ROUTES
+// ============================================
 
 /**
  * @swagger
  * /api/candidates:
  *   get:
- *     summary: Get all candidates
- *     tags: [Candidates]
- *     responses:
- *       200:
- *         description: List of all candidates
- */
-router.get("/", async (req, res) => {
-  console.log("\n📡 GET /api/candidates - Fetching all candidates");
-  
-  // Get driver ONLY when handling the request
-  const driver = getDriver();
-  const session = driver.session();
- 
-  try {
-    const result = await session.run(
-      "MATCH (c:Candidate) RETURN c ORDER BY c.id DESC"
-    );
- 
-    console.log(`📊 Found ${result.records.length} candidates`);
-   
-    const candidates = result.records.map(r => {
-      const c = r.get("c").properties;
-      return parseSkills(c);
-    });
- 
-    res.json({
-      success: true,
-      data: candidates,
-      count: candidates.length
-    });
-  } catch (err) {
-    console.error("❌ Error fetching candidates:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch candidates",
-      error: err.message
-    });
-  } finally {
-    await session.close();
-  }
-});
-
-/**
- * @swagger
- * /api/candidates/skills:
- *   get:
- *     summary: Get all unique skills and group candidates by skill (case-insensitive)
- *     tags: [Candidates]
- *     responses:
- *       200:
- *         description: Skills with candidate counts and grouped candidates
- */
-router.get("/skills", async (req, res) => {
-  console.log("\n📡 GET /api/candidates/skills - Fetching skills with candidate counts");
-  
-  const driver = getDriver();
-  const session = driver.session();
- 
-  try {
-    const result = await session.run(
-      "MATCH (c:Candidate) RETURN c"
-    );
- 
-    const candidates = result.records.map(r => {
-      const c = r.get("c").properties;
-      return parseSkills(c);
-    });
- 
-    const skillMap = new Map();
-   
-    candidates.forEach(candidate => {
-      if (candidate.skills && Array.isArray(candidate.skills)) {
-        candidate.skills.forEach(skill => {
-          const normalizedSkill = normalizeSkill(skill);
-          if (!skillMap.has(normalizedSkill)) {
-            skillMap.set(normalizedSkill, {
-              skill: skill, // Keep original case for display
-              normalizedSkill,
-              candidates: [],
-              count: 0
-            });
-          }
-          skillMap.get(normalizedSkill).candidates.push(candidate);
-          skillMap.get(normalizedSkill).count++;
-        });
-      }
-    });
- 
-    const skillsData = Array.from(skillMap.values())
-      .map(item => ({
-        skill: item.skill,
-        count: item.count,
-        candidates: item.candidates
-      }))
-      .sort((a, b) => a.skill.localeCompare(b.skill));
- 
-    console.log(`📊 Found ${skillsData.length} unique skills`);
-   
-    res.json({
-      success: true,
-      data: skillsData,
-      totalSkills: skillsData.length,
-      totalCandidates: candidates.length
-    });
-  } catch (err) {
-    console.error("❌ Error fetching skills data:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch skills data",
-      error: err.message
-    });
-  } finally {
-    await session.close();
-  }
-});
-
-/**
- * @swagger
- * /api/candidates/skill/{skillName}:
- *   get:
- *     summary: Get candidates by specific skill (case-insensitive)
- *     tags: [Candidates]
- *     parameters:
- *       - in: path
- *         name: skillName
- *         required: true
- *         schema:
- *           type: string
- *         description: Name of the skill to filter by (case-insensitive)
- *     responses:
- *       200:
- *         description: Candidates with the specified skill
- */
-router.get("/skill/:skillName", async (req, res) => {
-  console.log(`\n📡 GET /api/candidates/skill/${req.params.skillName}`);
-  
-  const driver = getDriver();
-  const session = driver.session();
-  const requestedSkill = req.params.skillName;
-  const normalizedRequestedSkill = normalizeSkill(requestedSkill);
- 
-  try {
-    // Get all candidates first (since Neo4j array contains exact strings)
-    const result = await session.run(
-      "MATCH (c:Candidate) RETURN c"
-    );
- 
-    const allCandidates = result.records.map(r => {
-      const c = r.get("c").properties;
-      return parseSkills(c);
-    });
- 
-    // Filter candidates case-insensitively
-    const candidates = allCandidates.filter(candidate => {
-      return candidate.skills && candidate.skills.some(skill =>
-        normalizeSkill(skill) === normalizedRequestedSkill
-      );
-    });
- 
-    // Find the original skill name (preserve case) from the first matching candidate
-    let originalSkillName = requestedSkill;
-    if (candidates.length > 0) {
-      const matchingSkill = candidates[0].skills.find(skill =>
-        normalizeSkill(skill) === normalizedRequestedSkill
-      );
-      if (matchingSkill) {
-        originalSkillName = matchingSkill;
-      }
-    }
- 
-    console.log(`📊 Found ${candidates.length} candidates with skill: ${originalSkillName}`);
- 
-    // Get related skills that these candidates have
-    const relatedSkills = new Map();
-    candidates.forEach(candidate => {
-      if (candidate.skills && Array.isArray(candidate.skills)) {
-        candidate.skills.forEach(skill => {
-          const normalizedSkill = normalizeSkill(skill);
-          if (normalizedSkill !== normalizedRequestedSkill) {
-            if (!relatedSkills.has(normalizedSkill)) {
-              relatedSkills.set(normalizedSkill, {
-                skill: skill,
-                count: 0
-              });
-            }
-            relatedSkills.get(normalizedSkill).count++;
-          }
-        });
-      }
-    });
- 
-    const relatedSkillsArray = Array.from(relatedSkills.values())
-      .sort((a, b) => b.count - a.count);
- 
-    res.json({
-      success: true,
-      skill: originalSkillName,
-      requestedSkill: requestedSkill,
-      count: candidates.length,
-      data: candidates,
-      relatedSkills: relatedSkillsArray,
-      summary: {
-        totalCandidates: candidates.length,
-        averageExperience: calculateAverageExperience(candidates),
-        commonLocations: getCommonLocations(candidates),
-        visaStatus: getVisaStatusDistribution(candidates)
-      }
-    });
-  } catch (err) {
-    console.error(`❌ Error fetching candidates for skill ${requestedSkill}:`, err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch candidates by skill",
-      error: err.message
-    });
-  } finally {
-    await session.close();
-  }
-});
-
-/**
- * @swagger
- * /api/candidates/search/skills:
- *   get:
- *     summary: Search candidates by skill pattern (case-insensitive, partial match)
+ *     summary: Get all candidates with pagination
  *     tags: [Candidates]
  *     parameters:
  *       - in: query
- *         name: q
- *         required: true
+ *         name: page
  *         schema:
- *           type: string
- *         description: Skill search query
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 4
  *     responses:
  *       200:
- *         description: Candidates matching skill pattern
+ *         description: Successful response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiResponse'
  */
-router.get("/search/skills", async (req, res) => {
-  console.log(`\n📡 GET /api/candidates/search/skills?q=${req.query.q}`);
+router.get("/", async (req, res) => {
+  console.log("\n📡 GET /api/candidates - Fetching candidates with pagination");
   
-  const driver = getDriver();
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 4;
+  const skip = (page - 1) * limit;
+  
   const session = driver.session();
-  const searchQuery = req.query.q;
- 
-  if (!searchQuery) {
-    return res.status(400).json({
-      success: false,
-      message: "Please provide a search query"
-    });
-  }
- 
-  const normalizedQuery = normalizeSkill(searchQuery);
- 
+  
   try {
+    // Get total count
+    const countResult = await session.run("MATCH (c:Candidate_Profile) RETURN count(c) as total");
+    const totalCount = toNumber(countResult.records[0].get('total'));
+    
+    // Get paginated results
     const result = await session.run(
-      "MATCH (c:Candidate) RETURN c"
+      "MATCH (c:Candidate_Profile) RETURN c ORDER BY c.Can_ID DESC SKIP $skip LIMIT $limit",
+      { skip: neo4j.int(skip), limit: neo4j.int(limit) }
     );
- 
-    const allCandidates = result.records.map(r => {
-      const c = r.get("c").properties;
-      return parseSkills(c);
+
+    console.log(`📊 Found ${result.records.length} candidate profiles (page ${page})`);
+    
+    const profiles = result.records.map(r => {
+      const profile = r.get("c").properties;
+      return formatProfileForResponse(profile);
     });
- 
-    // Find candidates whose skills contain the search query (case-insensitive)
-    const candidates = allCandidates.filter(candidate => {
-      return candidate.skills && candidate.skills.some(skill =>
-        normalizeSkill(skill).includes(normalizedQuery)
-      );
-    });
- 
-    // Group matching skills
-    const matchingSkills = new Set();
-    candidates.forEach(candidate => {
-      candidate.skills.forEach(skill => {
-        if (normalizeSkill(skill).includes(normalizedQuery)) {
-          matchingSkills.add(skill);
-        }
-      });
-    });
- 
-    console.log(`📊 Found ${candidates.length} candidates matching "${searchQuery}"`);
- 
+
     res.json({
       success: true,
-      query: searchQuery,
-      count: candidates.length,
-      data: candidates,
-      matchingSkills: Array.from(matchingSkills),
-      summary: {
-        totalCandidates: candidates.length,
-        averageExperience: calculateAverageExperience(candidates)
-      }
+      data: profiles,
+      currentPage: page,
+      limit: limit,
+      totalCount: totalCount,
+      totalPages: Math.ceil(totalCount / limit)
     });
   } catch (err) {
-    console.error(`❌ Error searching candidates:`, err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to search candidates",
-      error: err.message
+    console.error("❌ Error fetching candidate profiles:", err.message);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch candidate profiles",
+      error: err.message 
     });
   } finally {
     await session.close();
@@ -358,471 +582,302 @@ router.get("/search/skills", async (req, res) => {
 
 /**
  * @swagger
- * /api/candidates/filter/by-skills:
+ * /api/candidates/all:
+ *   get:
+ *     summary: Get ALL candidate profiles
+ *     tags: [Candidates]
+ *     responses:
+ *       200:
+ *         description: Successful response
+ */
+router.get("/all", async (req, res) => {
+  console.log("\n📡 GET /api/candidates/all - Fetching ALL candidate profiles");
+  
+  const session = driver.session();
+  
+  try {
+    const result = await session.run("MATCH (c:Candidate_Profile) RETURN c ORDER BY c.Can_ID DESC");
+
+    console.log(`📊 Found ${result.records.length} candidate profiles`);
+    
+    const profiles = result.records.map(r => {
+      const profile = r.get("c").properties;
+      return formatProfileForResponse(profile);
+    });
+
+    res.json({
+      success: true,
+      data: profiles,
+      count: profiles.length
+    });
+  } catch (err) {
+    console.error("❌ Error fetching candidate profiles:", err.message);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch candidate profiles",
+      error: err.message 
+    });
+  } finally {
+    await session.close();
+  }
+});
+
+/**
+ * @swagger
+ * /api/candidates/next-id:
+ *   get:
+ *     summary: Get next available Can_ID
+ *     tags: [Candidates]
+ *     responses:
+ *       200:
+ *         description: Successful response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/NextIdResponse'
+ */
+router.get("/next-id", async (req, res) => {
+  console.log("\n📡 GET /api/candidates/next-id - Getting next available Can_ID");
+  
+  const session = driver.session();
+  
+  try {
+    // FIXED: Use the correct property name 'Can_ID'
+    const result = await session.run(
+      "MATCH (c:Candidate_Profile) RETURN max(c.Can_ID) as maxCanId"
+    );
+    
+    const maxCanId = toNumber(result.records[0].get('maxCanId')) || 0;
+    const nextCanId = maxCanId + 1;
+    
+    console.log(`📊 Current max Can_ID: ${maxCanId}`);
+    console.log(`🔢 Next available Can_ID: ${nextCanId}`);
+    
+    res.json({
+      success: true,
+      nextCanId: nextCanId,
+      currentMaxId: maxCanId
+    });
+  } catch (err) {
+    console.error("❌ Error getting next ID:", err.message);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to get next ID",
+      error: err.message 
+    });
+  } finally {
+    await session.close();
+  }
+});
+
+/**
+ * @swagger
+ * /api/candidates/check-email/{email}:
+ *   get:
+ *     summary: Check if email already exists
+ *     tags: [Candidates]
+ *     parameters:
+ *       - in: path
+ *         name: email
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: excludeId
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Successful response
+ */
+router.get("/check-email/:email", async (req, res) => {
+  console.log(`\n📡 GET /api/candidates/check-email/${req.params.email}`);
+  const session = driver.session();
+  const email = req.params.email;
+  const excludeId = req.query.excludeId ? parseInt(req.query.excludeId) : null;
+
+  try {
+    const result = await session.run(
+      "MATCH (c:Candidate_Profile {Email: $email}) RETURN c",
+      { email }
+    );
+
+    let exists = false;
+    if (result.records.length > 0) {
+      if (excludeId) {
+        exists = result.records.some(record => {
+          const profile = record.get("c").properties;
+          const canId = toNumber(profile.Can_ID);
+          return canId !== excludeId;
+        });
+      } else {
+        exists = true;
+      }
+    }
+
+    res.json({
+      success: true,
+      exists
+    });
+  } catch (err) {
+    console.error("❌ Error checking email:", err.message);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to check email",
+      error: err.message 
+    });
+  } finally {
+    await session.close();
+  }
+});
+
+/**
+ * @swagger
+ * /api/candidates/check-mobile/{mobile}:
+ *   get:
+ *     summary: Check if mobile number already exists
+ *     tags: [Candidates]
+ *     parameters:
+ *       - in: path
+ *         name: mobile
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: excludeId
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Successful response
+ */
+router.get("/check-mobile/:mobile", async (req, res) => {
+  console.log(`\n📡 GET /api/candidates/check-mobile/${req.params.mobile}`);
+  const session = driver.session();
+  const mobile = req.params.mobile;
+  const excludeId = req.query.excludeId ? parseInt(req.query.excludeId) : null;
+
+  try {
+    const result = await session.run(
+      "MATCH (c:Candidate_Profile {`Mobile No`: $mobile}) RETURN c",
+      { mobile }
+    );
+
+    let exists = false;
+    if (result.records.length > 0) {
+      if (excludeId) {
+        exists = result.records.some(record => {
+          const profile = record.get("c").properties;
+          const canId = toNumber(profile.Can_ID);
+          return canId !== excludeId;
+        });
+      } else {
+        exists = true;
+      }
+    }
+
+    res.json({
+      success: true,
+      exists
+    });
+  } catch (err) {
+    console.error("❌ Error checking mobile:", err.message);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to check mobile",
+      error: err.message 
+    });
+  } finally {
+    await session.close();
+  }
+});
+
+/**
+ * @swagger
+ * /api/candidates/{id}:
+ *   get:
+ *     summary: Get candidate profile by ID
+ *     tags: [Candidates]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Successful response
+ *       404:
+ *         description: Candidate not found
+ */
+router.get("/:id", async (req, res) => {
+  console.log(`\n📡 GET /api/candidates/${req.params.id}`);
+  const session = driver.session();
+  const id = parseInt(req.params.id);
+
+  try {
+    const result = await session.run(
+      "MATCH (c:Candidate_Profile) WHERE c.Can_ID = $id RETURN c",
+      { id }
+    );
+
+    if (!result.records.length) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Candidate profile not found" 
+      });
+    }
+
+    const profile = result.records[0].get("c").properties;
+    const formatted = formatProfileForResponse(profile);
+
+    res.json({
+      success: true,
+      data: formatted
+    });
+  } catch (err) {
+    console.error(`❌ Error fetching candidate profile ${id}:`, err.message);
+    res.status(500).json({ 
+      success: false,
+      message: "Error fetching candidate profile",
+      error: err.message 
+    });
+  } finally {
+    await session.close();
+  }
+});
+
+/**
+ * @swagger
+ * /api/candidates/:
  *   post:
- *     summary: Filter candidates by multiple skills (case-insensitive)
+ *     summary: Create new candidate profile
  *     tags: [Candidates]
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
- *             type: object
- *             properties:
- *               skills:
- *                 type: array
- *                 items:
- *                   type: string
- *                 example: ["python", "java", "iot"]
- *               matchType:
- *                 type: string
- *                 enum: [ANY, ALL]
- *                 default: ANY
+ *             $ref: '#/components/schemas/CandidateInput'
  *     responses:
- *       200:
- *         description: Filtered candidates
+ *       201:
+ *         description: Candidate created successfully
+ *       400:
+ *         description: Validation error or duplicate entry
+ *       500:
+ *         description: Server error
  */
-router.post("/filter/by-skills", async (req, res) => {
-  console.log("\n📡 POST /api/candidates/filter/by-skills - Filtering candidates by skills");
+router.post("/", upload.single('resume'), async (req, res) => {
+  console.log("\n📡 POST /api/candidates - Creating new candidate profile");
   console.log("Request body:", req.body);
- 
-  const driver = getDriver();
-  const session = driver.session();
-  const { skills, matchType = 'ANY' } = req.body;
- 
-  if (!skills || !Array.isArray(skills) || skills.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Please provide an array of skills to filter by"
-    });
-  }
- 
-  // Normalize all input skills
-  const normalizedSkills = skills.map(s => normalizeSkill(s));
- 
-  try {
-    const result = await session.run(
-      "MATCH (c:Candidate) RETURN c"
-    );
- 
-    const allCandidates = result.records.map(r => {
-      const c = r.get("c").properties;
-      return parseSkills(c);
-    });
- 
-    // Filter candidates based on normalized skills
-    const candidates = allCandidates.filter(candidate => {
-      if (!candidate.skills) return false;
-     
-      const normalizedCandidateSkills = candidate.skills.map(s => normalizeSkill(s));
-     
-      if (matchType === 'ALL') {
-        return normalizedSkills.every(skill =>
-          normalizedCandidateSkills.includes(skill)
-        );
-      } else {
-        return normalizedSkills.some(skill =>
-          normalizedCandidateSkills.includes(skill)
-        );
-      }
-    });
- 
-    // Group results by original skill names
-    const skillGroups = {};
-    skills.forEach((originalSkill, index) => {
-      const normalized = normalizedSkills[index];
-      skillGroups[originalSkill] = candidates.filter(c =>
-        c.skills && c.skills.some(s => normalizeSkill(s) === normalized)
-      );
-    });
- 
-    console.log(`📊 Found ${candidates.length} candidates matching skills`);
- 
-    res.json({
-      success: true,
-      matchType,
-      requestedSkills: skills,
-      totalCount: candidates.length,
-      data: candidates,
-      groupedBySkill: skillGroups,
-      skillCounts: skills.map((skill, index) => ({
-        skill,
-        normalized: normalizedSkills[index],
-        count: skillGroups[skill]?.length || 0
-      }))
-    });
-  } catch (err) {
-    console.error("❌ Error filtering candidates by skills:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to filter candidates",
-      error: err.message
-    });
-  } finally {
-    await session.close();
-  }
-});
-
-/**
- * @swagger
- * /api/candidates/skill/{skillName}/stats:
- *   get:
- *     summary: Get statistics for a specific skill (case-insensitive)
- *     tags: [Candidates]
- *     parameters:
- *       - in: path
- *         name: skillName
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Skill statistics
- */
-router.get("/skill/:skillName/stats", async (req, res) => {
-  console.log(`\n📡 GET /api/candidates/skill/${req.params.skillName}/stats`);
+  console.log("Request file:", req.file ? {
+    originalname: req.file.originalname,
+    size: req.file.size,
+    mimetype: req.file.mimetype
+  } : 'No file');
   
-  const driver = getDriver();
   const session = driver.session();
-  const requestedSkill = req.params.skillName;
-  const normalizedRequestedSkill = normalizeSkill(requestedSkill);
- 
-  try {
-    const result = await session.run(
-      "MATCH (c:Candidate) RETURN c"
-    );
- 
-    const allCandidates = result.records.map(r => {
-      const c = r.get("c").properties;
-      return parseSkills(c);
-    });
- 
-    // Get candidates with this skill
-    const candidatesWithSkill = allCandidates.filter(candidate =>
-      candidate.skills && candidate.skills.some(skill =>
-        normalizeSkill(skill) === normalizedRequestedSkill
-      )
-    );
- 
-    // Get all variations of this skill (different cases)
-    const skillVariations = new Set();
-    allCandidates.forEach(candidate => {
-      if (candidate.skills) {
-        candidate.skills.forEach(skill => {
-          if (normalizeSkill(skill) === normalizedRequestedSkill) {
-            skillVariations.add(skill);
-          }
-        });
-      }
-    });
- 
-    // Calculate statistics
-    const totalCandidates = allCandidates.length;
-    const skillCount = candidatesWithSkill.length;
-    const percentage = totalCandidates > 0 ? ((skillCount / totalCandidates) * 100).toFixed(2) : 0;
- 
-    // Experience distribution
-    const experienceRanges = {
-      '0-2 years': candidatesWithSkill.filter(c => parseInt(c.experience) <= 2).length,
-      '3-5 years': candidatesWithSkill.filter(c => parseInt(c.experience) >= 3 && parseInt(c.experience) <= 5).length,
-      '6-10 years': candidatesWithSkill.filter(c => parseInt(c.experience) >= 6 && parseInt(c.experience) <= 10).length,
-      '10+ years': candidatesWithSkill.filter(c => parseInt(c.experience) > 10).length
-    };
- 
-    res.json({
-      success: true,
-      skill: {
-        requested: requestedSkill,
-        normalized: normalizedRequestedSkill,
-        variations: Array.from(skillVariations)
-      },
-      statistics: {
-        totalCandidates,
-        candidatesWithSkill: skillCount,
-        percentage: `${percentage}%`,
-        experienceDistribution: experienceRanges,
-        averageExperience: calculateAverageExperience(candidatesWithSkill),
-        availableCount: candidatesWithSkill.filter(c => c.status === 'Available').length
-      }
-    });
-  } catch (err) {
-    console.error(`❌ Error fetching skill statistics:`, err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch skill statistics",
-      error: err.message
-    });
-  } finally {
-    await session.close();
-  }
-});
 
-// Keep all your existing specific skill endpoints (/iot, /python, /java, etc.)
-// but update them to use the normalized filtering
-
-router.get("/iot", async (req, res) => {
-  console.log("\n📡 GET /api/candidates/iot - Fetching IoT candidates");
-  
-  const driver = getDriver();
-  const session = driver.session();
- 
-  try {
-    const result = await session.run(
-      "MATCH (c:Candidate) RETURN c"
-    );
- 
-    const allCandidates = result.records.map(r => {
-      const c = r.get("c").properties;
-      return parseSkills(c);
-    });
- 
-    // Case-insensitive filtering for IoT
-    const candidates = allCandidates.filter(candidate =>
-      candidate.skills && candidate.skills.some(skill =>
-        normalizeSkill(skill) === 'iot'
-      )
-    );
- 
-    console.log(`📊 Found ${candidates.length} IoT candidates`);
- 
-    res.json({
-      success: true,
-      category: "IoT",
-      count: candidates.length,
-      data: candidates
-    });
-  } catch (err) {
-    console.error("❌ Error fetching IoT candidates:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch IoT candidates",
-      error: err.message
-    });
-  } finally {
-    await session.close();
-  }
-});
-
-router.get("/python", async (req, res) => {
-  console.log("\n📡 GET /api/candidates/python - Fetching Python candidates");
-  
-  const driver = getDriver();
-  const session = driver.session();
- 
-  try {
-    const result = await session.run(
-      "MATCH (c:Candidate) RETURN c"
-    );
- 
-    const allCandidates = result.records.map(r => {
-      const c = r.get("c").properties;
-      return parseSkills(c);
-    });
- 
-    // Case-insensitive filtering for Python
-    const candidates = allCandidates.filter(candidate =>
-      candidate.skills && candidate.skills.some(skill =>
-        normalizeSkill(skill) === 'python'
-      )
-    );
- 
-    console.log(`📊 Found ${candidates.length} Python candidates`);
- 
-    res.json({
-      success: true,
-      category: "Python",
-      count: candidates.length,
-      data: candidates
-    });
-  } catch (err) {
-    console.error("❌ Error fetching Python candidates:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch Python candidates",
-      error: err.message
-    });
-  } finally {
-    await session.close();
-  }
-});
-
-router.get("/java", async (req, res) => {
-  console.log("\n📡 GET /api/candidates/java - Fetching Java candidates");
-  
-  const driver = getDriver();
-  const session = driver.session();
- 
-  try {
-    const result = await session.run(
-      "MATCH (c:Candidate) RETURN c"
-    );
- 
-    const allCandidates = result.records.map(r => {
-      const c = r.get("c").properties;
-      return parseSkills(c);
-    });
- 
-    // Case-insensitive filtering for Java
-    const candidates = allCandidates.filter(candidate =>
-      candidate.skills && candidate.skills.some(skill =>
-        normalizeSkill(skill) === 'java'
-      )
-    );
- 
-    console.log(`📊 Found ${candidates.length} Java candidates`);
- 
-    res.json({
-      success: true,
-      category: "Java",
-      count: candidates.length,
-      data: candidates
-    });
-  } catch (err) {
-    console.error("❌ Error fetching Java candidates:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch Java candidates",
-      error: err.message
-    });
-  } finally {
-    await session.close();
-  }
-});
-
-router.get("/embedded", async (req, res) => {
-  console.log("\n📡 GET /api/candidates/embedded - Fetching Embedded Systems candidates");
-  
-  const driver = getDriver();
-  const session = driver.session();
- 
-  try {
-    const result = await session.run(
-      "MATCH (c:Candidate) RETURN c"
-    );
- 
-    const allCandidates = result.records.map(r => {
-      const c = r.get("c").properties;
-      return parseSkills(c);
-    });
- 
-    // Case-insensitive filtering for Embedded Systems
-    const candidates = allCandidates.filter(candidate =>
-      candidate.skills && candidate.skills.some(skill =>
-        normalizeSkill(skill) === 'embedded systems'
-      )
-    );
- 
-    console.log(`📊 Found ${candidates.length} Embedded Systems candidates`);
- 
-    res.json({
-      success: true,
-      category: "Embedded Systems",
-      count: candidates.length,
-      data: candidates
-    });
-  } catch (err) {
-    console.error("❌ Error fetching Embedded Systems candidates:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch Embedded Systems candidates",
-      error: err.message
-    });
-  } finally {
-    await session.close();
-  }
-});
-
-router.get("/pcb-design", async (req, res) => {
-  console.log("\n📡 GET /api/candidates/pcb-design - Fetching PCB Design candidates");
-  
-  const driver = getDriver();
-  const session = driver.session();
- 
-  try {
-    const result = await session.run(
-      "MATCH (c:Candidate) RETURN c"
-    );
- 
-    const allCandidates = result.records.map(r => {
-      const c = r.get("c").properties;
-      return parseSkills(c);
-    });
- 
-    // Case-insensitive filtering for PCB Design
-    const candidates = allCandidates.filter(candidate =>
-      candidate.skills && candidate.skills.some(skill =>
-        normalizeSkill(skill) === 'pcb design'
-      )
-    );
- 
-    console.log(`📊 Found ${candidates.length} PCB Design candidates`);
- 
-    res.json({
-      success: true,
-      category: "PCB Design",
-      count: candidates.length,
-      data: candidates
-    });
-  } catch (err) {
-    console.error("❌ Error fetching PCB Design candidates:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch PCB Design candidates",
-      error: err.message
-    });
-  } finally {
-    await session.close();
-  }
-});
-
-// GET candidate by ID
-router.get("/:id", async (req, res) => {
-  console.log(`\n📡 GET /api/candidates/${req.params.id}`);
-  
-  const driver = getDriver();
-  const session = driver.session();
-  const id = parseInt(req.params.id);
- 
-  try {
-    const result = await session.run(
-      "MATCH (c:Candidate {id: $id}) RETURN c",
-      { id }
-    );
- 
-    if (!result.records.length) {
-      return res.status(404).json({
-        success: false,
-        message: "Candidate not found"
-      });
-    }
- 
-    const candidate = result.records[0].get("c").properties;
-    parseSkills(candidate);
- 
-    res.json({
-      success: true,
-      data: candidate
-    });
-  } catch (err) {
-    console.error(`❌ Error fetching candidate ${id}:`, err.message);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching candidate",
-      error: err.message
-    });
-  } finally {
-    await session.close();
-  }
-});
-
-// POST create new candidate
-router.post("/", async (req, res) => {
-  console.log("\n📡 POST /api/candidates - Creating new candidate");
-  console.log("Request body:", req.body);
- 
-  const driver = getDriver();
-  const session = driver.session();
- 
   try {
     // Validation
     if (!req.body.name || !req.body.email || !req.body.mobile) {
@@ -831,83 +886,182 @@ router.post("/", async (req, res) => {
         message: "Name, email, and mobile are required fields"
       });
     }
- 
+
     // Check for duplicate email
     const emailCheck = await session.run(
-      "MATCH (c:Candidate {email: $email}) RETURN c",
+      "MATCH (c:Candidate_Profile {Email: $email}) RETURN c",
       { email: req.body.email }
     );
- 
+
     if (emailCheck.records.length > 0) {
       return res.status(400).json({
         success: false,
         message: "Candidate with this email already exists"
       });
     }
- 
-    // Get next ID - FIXED: Handle Neo4j integer properly
+
+    // Check for duplicate mobile
+    const mobileCheck = await session.run(
+      "MATCH (c:Candidate_Profile {`Mobile No`: $mobile}) RETURN c",
+      { mobile: req.body.mobile }
+    );
+
+    if (mobileCheck.records.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Candidate with this mobile number already exists"
+      });
+    }
+
+    // FIXED: Use the correct property name 'Can_ID'
     const idResult = await session.run(
-      "MATCH (c:Candidate) RETURN coalesce(MAX(c.id), 0) + 1 AS nextId"
+      "MATCH (c:Candidate_Profile) RETURN max(c.Can_ID) as maxCanId"
     );
-   
-    // Fix: Convert Neo4j integer to JavaScript number
-    const nextIdRecord = idResult.records[0].get("nextId");
-    const id = nextIdRecord.low !== undefined ? nextIdRecord.toNumber() : Number(nextIdRecord);
-   
-    console.log("Generated ID:", id);
- 
-    // Prepare candidate data
-    const candidateData = {
-      id,
-      name: req.body.name,
-      email: req.body.email,
-      mobile: req.body.mobile,
-      location: req.body.location || "",
-      visaStatus: req.body.visaStatus || "Not Required",
-      passport: req.body.passport || "",
-      experience: req.body.experience || "",
-      currentRole: req.body.currentRole || "",
-      skills: req.body.skills || [],
-      status: req.body.status || "Available",
-      noticePeriod: req.body.noticePeriod || "",
-      salary: req.body.salary || "",
-      education: req.body.education || "",
-      bio: req.body.bio || "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
- 
-    console.log("Saving candidate data:", candidateData);
- 
-    const result = await session.run(
-      "CREATE (c:Candidate) SET c = $data RETURN c",
-      { data: candidateData }
-    );
- 
-    const created = result.records[0].get("c").properties;
-   
-    // Parse skills if needed
-    if (created.skills && typeof created.skills === 'string') {
-      try {
-        created.skills = JSON.parse(created.skills);
-      } catch {
-        created.skills = created.skills.split(',').map(s => s.trim());
+    
+    const maxCanId = toNumber(idResult.records[0].get('maxCanId')) || 0;
+    const nextCanId = maxCanId + 1;
+    
+    console.log("📊 Current max Can_ID in database:", maxCanId);
+    console.log("🔢 Generated new Can_ID:", nextCanId);
+
+    // Initialize storage variables
+    let googleDriveFileId = null;
+    let googleDriveViewLink = null;
+    let googleDriveDownloadLink = null;
+    let resumePath = null;
+
+    // Handle file upload if present
+    if (req.file) {
+      console.log("File received:", {
+        originalname: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      });
+      
+      // Try Google Drive first
+      const driveResult = await uploadToGoogleDrive(req.file, req.body.name);
+      
+      if (driveResult) {
+        googleDriveFileId = driveResult.googleDriveFileId;
+        googleDriveViewLink = driveResult.googleDriveViewLink;
+        googleDriveDownloadLink = driveResult.googleDriveDownloadLink;
+        console.log("✅ Resume stored in Google Drive");
+      } else {
+        // Fallback to local storage
+        const localResult = saveFileLocally(req.file, req.body.name);
+        if (localResult) {
+          resumePath = localResult.resumePath;
+          console.log("✅ Resume stored locally");
+        }
       }
     }
- 
-    console.log("✅ Candidate created successfully with ID:", id);
- 
+
+    // Parse Key Skills
+    let keySkills = req.body.keySkills;
+    if (typeof keySkills === 'string') {
+      // Handle comma-separated string like "React,Node.js,JavaScript"
+      if (keySkills.includes(',')) {
+        keySkills = keySkills.split(',').map(s => s.trim()).filter(s => s);
+      } else {
+        // Try to parse as JSON array
+        try {
+          const parsed = JSON.parse(keySkills);
+          keySkills = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          // If not JSON and no commas, treat as single skill
+          keySkills = [keySkills];
+        }
+      }
+    }
+
+    // Ensure keySkills is an array
+    if (!Array.isArray(keySkills)) {
+      keySkills = keySkills ? [keySkills] : [];
+    }
+
+    // FIXED: Use the correct property names that match your database
+    const profileData = {
+      "Candidate Name": req.body.name,
+      "Email": req.body.email,
+      "Mobile No": req.body.mobile,
+      "Experience": req.body.experience || "",
+      "Current Org": req.body.currentOrg || "",
+      "Current CTC": req.body.currentCTC || "",
+      "Expected CTC": req.body.expectedCTC || "",
+      "Notice Period in days": req.body.noticePeriod || "",
+      "Profiles sourced by": req.body.profileSourcedBy || "",
+      "Client Name": req.body.clientName || "",
+      "Profile submission date": req.body.profileSubmissionDate || "",
+      "Key Skills": keySkills,
+      "Can_ID": nextCanId,  // This is the correct property name
+      "Visa type": req.body.visaType || "NA",
+      "resumePath": resumePath,
+      "googleDriveFileId": googleDriveFileId,
+      "googleDriveViewLink": googleDriveViewLink,
+      "googleDriveDownloadLink": googleDriveDownloadLink,
+      "createdAt": new Date().toISOString(),
+      "updatedAt": new Date().toISOString(),
+      "id": nextCanId // Also set id field for compatibility
+    };
+
+    console.log("Saving candidate profile with Can_ID:", nextCanId);
+    console.log("Skills:", keySkills);
+
+    // Use a transaction to ensure atomicity
+    const result = await session.executeWrite(async (tx) => {
+      // Double-check the max ID within the transaction
+      const checkResult = await tx.run(
+        "MATCH (c:Candidate_Profile) WHERE c.Can_ID = $id RETURN c",
+        { id: nextCanId }
+      );
+      
+      if (checkResult.records.length > 0) {
+        throw new Error(`Can_ID ${nextCanId} already exists`);
+      }
+      
+      // Create the new candidate
+      const createResult = await tx.run(
+        "CREATE (c:Candidate_Profile) SET c = $data RETURN c",
+        { data: profileData }
+      );
+      
+      return createResult.records[0].get("c").properties;
+    });
+
+    const formatted = formatProfileForResponse(result);
+
+    console.log("✅ Candidate profile created successfully with Can_ID:", nextCanId);
+    console.log(`📊 Total profiles now: ${nextCanId}`);
+
     res.status(201).json({
       success: true,
-      message: "Candidate created successfully",
-      data: created
+      message: "Candidate profile created successfully",
+      data: formatted
     });
- 
+
   } catch (err) {
-    console.error("❌ Error creating candidate:", err);
+    console.error("❌ Error creating candidate profile:", err);
+    
+    // Check for specific Neo4j constraint errors
+    if (err.message && err.message.includes("already exists with label")) {
+      return res.status(400).json({
+        success: false,
+        message: "A candidate with this ID already exists. Please try again.",
+        error: err.message
+      });
+    }
+    
+    if (err.message && err.message.includes("Can_ID")) {
+      return res.status(400).json({
+        success: false,
+        message: err.message,
+        error: err.message
+      });
+    }
+    
     res.status(500).json({
       success: false,
-      message: "Failed to create candidate",
+      message: "Failed to create candidate profile",
       error: err.message
     });
   } finally {
@@ -915,139 +1069,339 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PUT update candidate
-router.put("/:id", async (req, res) => {
-  console.log(`\n📡 PUT /api/candidates/${req.params.id}`);
+/**
+ * @swagger
+ * /api/candidates/{id}:
+ *   put:
+ *     summary: Update candidate profile
+ *     tags: [Candidates]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             $ref: '#/components/schemas/CandidateInput'
+ *     responses:
+ *       200:
+ *         description: Candidate updated successfully
+ *       404:
+ *         description: Candidate not found
+ *       500:
+ *         description: Server error
+ */
+router.put("/:id", upload.single('resume'), async (req, res) => {
+  console.log(`\n📡 PUT /api/candidates/${req.params.id} - Updating candidate profile`);
   
-  const driver = getDriver();
   const session = driver.session();
   const id = parseInt(req.params.id);
- 
+
   try {
-    // Check if candidate exists
+    // Check if candidate profile exists
     const checkResult = await session.run(
-      "MATCH (c:Candidate {id: $id}) RETURN c",
+      "MATCH (c:Candidate_Profile) WHERE c.Can_ID = $id RETURN c",
       { id }
     );
- 
+
     if (!checkResult.records.length) {
-      return res.status(404).json({
+      return res.status(404).json({ 
         success: false,
-        message: "Candidate not found"
+        message: "Candidate profile not found" 
       });
     }
- 
+
+    const existingProfile = checkResult.records[0].get("c").properties;
+    const formattedExisting = formatProfileForResponse(existingProfile);
+
+    // Validation
+    if (!req.body.name || !req.body.email || !req.body.mobile) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, email, and mobile are required fields"
+      });
+    }
+
+    // Check for duplicate email (excluding current candidate)
+    const emailCheck = await session.run(
+      "MATCH (c:Candidate_Profile {Email: $email}) WHERE c.Can_ID <> $id RETURN c",
+      { email: req.body.email, id }
+    );
+
+    if (emailCheck.records.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Candidate with this email already exists"
+      });
+    }
+
+    // Check for duplicate mobile (excluding current candidate)
+    const mobileCheck = await session.run(
+      "MATCH (c:Candidate_Profile {`Mobile No`: $mobile}) WHERE c.Can_ID <> $id RETURN c",
+      { mobile: req.body.mobile, id }
+    );
+
+    if (mobileCheck.records.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Candidate with this mobile number already exists"
+      });
+    }
+
+    // Initialize storage variables with existing values
+    let googleDriveFileId = formattedExisting.googleDriveFileId;
+    let googleDriveViewLink = formattedExisting.googleDriveViewLink;
+    let googleDriveDownloadLink = formattedExisting.googleDriveDownloadLink;
+    let resumePath = formattedExisting.resumePath;
+
+    // Handle new file upload if present
+    if (req.file) {
+      console.log("New file received for update:", {
+        originalname: req.file.originalname,
+        size: req.file.size
+      });
+      
+      // Try Google Drive first
+      const driveResult = await uploadToGoogleDrive(req.file, req.body.name);
+      
+      if (driveResult) {
+        // Google Drive upload successful
+        googleDriveFileId = driveResult.googleDriveFileId;
+        googleDriveViewLink = driveResult.googleDriveViewLink;
+        googleDriveDownloadLink = driveResult.googleDriveDownloadLink;
+        
+        // If there was an old local file, delete it
+        if (formattedExisting.resumePath) {
+          const oldResumePath = path.join(__dirname, '..', formattedExisting.resumePath);
+          if (fs.existsSync(oldResumePath)) {
+            fs.unlinkSync(oldResumePath);
+            console.log("✅ Old local resume deleted");
+          }
+        }
+        
+        resumePath = null;
+        console.log("✅ New resume stored in Google Drive");
+      } else {
+        // Fallback to local storage
+        const localResult = saveFileLocally(req.file, req.body.name);
+        if (localResult) {
+          resumePath = localResult.resumePath;
+          console.log("✅ New resume stored locally");
+        }
+      }
+    }
+
+    // Parse Key Skills
+    let keySkills = req.body.keySkills;
+    if (typeof keySkills === 'string') {
+      if (keySkills.includes(',')) {
+        keySkills = keySkills.split(',').map(s => s.trim()).filter(s => s);
+      } else {
+        try {
+          const parsed = JSON.parse(keySkills);
+          keySkills = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          keySkills = [keySkills];
+        }
+      }
+    }
+
+    if (!Array.isArray(keySkills)) {
+      keySkills = keySkills ? [keySkills] : [];
+    }
+
     // Prepare update data
-    const updateData = { ...req.body };
-    delete updateData.id; // Don't update ID
-    delete updateData.createdDate; // Don't update created date
- 
+// Prepare update data - with non-editable submission date
+const updateData = {
+  "Candidate Name": req.body.name,
+  "Email": req.body.email,
+  "Mobile No": req.body.mobile,
+  "Experience": req.body.experience || formattedExisting.experience || "",
+  "Current Org": req.body.currentOrg || formattedExisting.currentOrg || "",
+  "Current CTC": req.body.currentCTC || formattedExisting.currentCTC || "",
+  "Expected CTC": req.body.expectedCTC || formattedExisting.expectedCTC || "",
+  "Notice Period in days": req.body.noticePeriod || formattedExisting.noticePeriod || "",
+  "Profiles sourced by": req.body.profileSourcedBy || formattedExisting.profileSourcedBy || "",
+  "Client Name": req.body.clientName || formattedExisting.clientName || "",
+  // IMPORTANT: Always use existing submission date - never allow updates
+  "Profile submission date": formattedExisting.profileSubmissionDate || "",
+  "Key Skills": Array.isArray(keySkills) ? keySkills : (keySkills || formattedExisting.keySkills || []),
+  "Can_ID": formattedExisting.canId || id,
+  "Visa type": req.body.visaType || formattedExisting.visaType || "NA",
+  "resumePath": resumePath,
+  "googleDriveFileId": googleDriveFileId,
+  "googleDriveViewLink": googleDriveViewLink,
+  "googleDriveDownloadLink": googleDriveDownloadLink,
+  "updatedAt": new Date().toISOString(),
+  "createdAt": formattedExisting.createdAt,
+  "id": formattedExisting.id || id
+};
+
+    console.log("Updating candidate profile...");
+
     const result = await session.run(
-      `MATCH (c:Candidate {id: $id})
-       SET c += $data
+      `MATCH (c:Candidate_Profile) WHERE c.Can_ID = $id
+       SET c = $data
        RETURN c`,
       { id, data: updateData }
     );
- 
+
     const updated = result.records[0].get("c").properties;
-    parseSkills(updated);
- 
+    const formatted = formatProfileForResponse(updated);
+
+    console.log("✅ Candidate profile updated successfully with Can_ID:", id);
+
     res.json({
       success: true,
-      message: "Candidate updated successfully",
-      data: updated
+      message: "Candidate profile updated successfully",
+      data: formatted
     });
   } catch (err) {
-    console.error(`❌ Error updating candidate ${id}:`, err.message);
-    res.status(500).json({
+    console.error(`❌ Error updating candidate profile ${id}:`, err);
+    res.status(500).json({ 
       success: false,
-      message: "Failed to update candidate",
-      error: err.message
+      message: "Failed to update candidate profile",
+      error: err.message 
     });
   } finally {
     await session.close();
   }
 });
 
-// DELETE candidate
+/**
+ * @swagger
+ * /api/candidates/{id}:
+ *   delete:
+ *     summary: Delete candidate profile
+ *     tags: [Candidates]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Candidate deleted successfully
+ *       404:
+ *         description: Candidate not found
+ *       500:
+ *         description: Server error
+ */
 router.delete("/:id", async (req, res) => {
-  console.log(`\n📡 DELETE /api/candidates/${req.params.id}`);
-  
-  const driver = getDriver();
+  console.log(`\n📡 DELETE /api/candidates/${req.params.id} - Deleting candidate profile`);
   const session = driver.session();
   const id = parseInt(req.params.id);
- 
+
   try {
-    const result = await session.run(
-      "MATCH (c:Candidate {id: $id}) DELETE c RETURN count(c) as deletedCount",
+    // First get the candidate profile to check for resume
+    const checkResult = await session.run(
+      "MATCH (c:Candidate_Profile) WHERE c.Can_ID = $id RETURN c",
       { id }
     );
- 
-    const deletedCount = result.records[0].get("deletedCount").toNumber();
- 
+
+    if (!checkResult.records.length) {
+      return res.status(404).json({
+        success: false,
+        message: "Candidate profile not found"
+      });
+    }
+
+    const profile = checkResult.records[0].get("c").properties;
+    const formatted = formatProfileForResponse(profile);
+
+    // Delete from Google Drive if file exists
+    if (formatted.googleDriveFileId) {
+      console.log(`🗑️ Deleting from Google Drive: ${formatted.googleDriveFileId}`);
+      await deleteFromGoogleDrive(formatted.googleDriveFileId);
+    }
+
+    // Delete local resume file if it exists
+    if (formatted.resumePath) {
+      const resumeFilePath = path.join(__dirname, '..', formatted.resumePath);
+      if (fs.existsSync(resumeFilePath)) {
+        fs.unlinkSync(resumeFilePath);
+        console.log("✅ Local resume deleted");
+      }
+    }
+
+    // Delete the candidate profile node
+    const result = await session.run(
+      "MATCH (c:Candidate_Profile) WHERE c.Can_ID = $id DELETE c RETURN count(c) as deletedCount",
+      { id }
+    );
+
+    const countValue = result.records[0].get("deletedCount");
+    const deletedCount = toNumber(countValue);
+
     if (deletedCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "Candidate not found"
+        message: "Candidate profile not found"
       });
     }
- 
+
+    console.log("✅ Candidate profile deleted successfully with Can_ID:", id);
+
     res.json({
       success: true,
-      message: "Candidate deleted successfully"
+      message: "Candidate profile deleted successfully"
     });
   } catch (err) {
-    console.error(`❌ Error deleting candidate ${id}:`, err.message);
+    console.error(`❌ Error deleting candidate profile ${id}:`, err.message);
     res.status(500).json({
       success: false,
-      message: "Failed to delete candidate",
+      message: "Failed to delete candidate profile",
       error: err.message
     });
   } finally {
     await session.close();
   }
 });
-
-// Helper function to calculate average experience
-const calculateAverageExperience = (candidates) => {
-  if (candidates.length === 0) return 0;
- 
-  const total = candidates.reduce((sum, candidate) => {
-    const exp = parseInt(candidate.experience) || 0;
-    return sum + exp;
-  }, 0);
- 
-  return (total / candidates.length).toFixed(1);
-};
-
-// Helper function to get common locations
-const getCommonLocations = (candidates) => {
-  const locations = {};
-  candidates.forEach(candidate => {
-    if (candidate.location) {
-      const city = candidate.location.split(',')[0].trim();
-      locations[city] = (locations[city] || 0) + 1;
-    }
-  });
- 
-  return Object.entries(locations)
-    .map(([location, count]) => ({ location, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
-};
-
-// Helper function to get visa status distribution
-const getVisaStatusDistribution = (candidates) => {
-  const visaStatus = {};
-  candidates.forEach(candidate => {
-    if (candidate.visaStatus) {
-      visaStatus[candidate.visaStatus] = (visaStatus[candidate.visaStatus] || 0) + 1;
-    }
-  });
- 
-  return Object.entries(visaStatus)
-    .map(([status, count]) => ({ status, count }))
-    .sort((a, b) => b.count - a.count);
-};
+/**
+ * @swagger
+ * /api/candidates/resume/{filename}:
+ *   get:
+ *     summary: Serve resume file
+ *     tags: [Candidates]
+ *     parameters:
+ *       - in: path
+ *         name: filename
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Resume file
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Resume not found
+ */
+router.get("/resume/:filename", (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, "../uploads", filename);
+  
+  console.log("Looking for resume at:", filePath);
+  
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.sendFile(filePath);
+  } else {
+    console.error("Resume not found:", filePath);
+    res.status(404).json({ 
+      success: false, 
+      message: "Resume not found" 
+    });
+  }
+});
 
 module.exports = router;

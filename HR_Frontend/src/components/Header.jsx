@@ -66,7 +66,7 @@ const Header = () => {
             {navItem("Demand", "/demand")}
             {navItem("Recruiter", "/recruiter")}
             {/* Show Create User link only for Admin */}
-            {isAdmin && navItem("Create User", "/create-user")}
+            {isAdmin && navItem("User", "/create-user")}
           </div>
 
           {/* RIGHT: User Profile */}

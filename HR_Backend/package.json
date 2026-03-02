@@ -15,9 +15,16 @@
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "googleapis": "^171.4.0",
+    "multer": "^2.0.2",
     "neo4j-driver": "^6.0.1",
     "node-cron": "^4.2.1",
+    "pdf-compressor": "^1.0.5",
+    "pdf-lib": "^1.17.1",
+    "pdf-poppler": "^0.2.3",
+    "sharp": "^0.34.5",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "tmp": "^0.2.5"
   }
 }

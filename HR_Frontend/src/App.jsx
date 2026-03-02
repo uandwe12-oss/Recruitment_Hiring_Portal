@@ -5,7 +5,7 @@ import Login from "./Pages/Login";
 import Home from "./Pages/Home";
 import Demand from "./Pages/Demand";
 import Recruiter from "./Pages/Recruiter";
-import CreateUser from "./Pages/CreateUser"; // You'll create this next
+import CreateUser from "./Pages/CreateUser";
 
 // Protected Route component
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
@@ -19,7 +19,8 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return <Navigate to="/home" replace />;
   }
   
-  return children;
+  // Pass the user to the child component
+  return React.cloneElement(children, { user });
 };
 
 function App() {
