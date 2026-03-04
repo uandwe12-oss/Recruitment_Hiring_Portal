@@ -7,19 +7,34 @@ const path = require('path');
 
 const app = express();
 
-// ✅ Updated CORS configuration - SINGLE SOURCE OF TRUTH
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'https://recruitment-hiring-portal-ibsf.vercel.app'],
+// ✅ Enhanced CORS configuration
+const corsOptions = {
+  origin: [
+    'http://localhost:3000', 
+    'http://localhost:3001', 
+    'http://localhost:5173', 
+    'https://recruitment-hiring-portal-ibsf.vercel.app'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept'],
   optionsSuccessStatus: 200
-}));
+};
 
+// Apply CORS globally
+app.use(cors(corsOptions));
+
+// ✅ Explicit OPTIONS handler for all routes
+app.options('/*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', 'https://recruitment-hiring-portal-ibsf.vercel.app');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, X-Requested-With, Accept');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-//app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // 🔹 Import Routes
 const loginRoute = require("./api/login");
@@ -41,7 +56,7 @@ const swaggerOptions = {
     servers: [
       {
         url: "https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app",
-        description: "Development server"
+        description: "Production server"
       }
     ]
   },
@@ -87,18 +102,3 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
-
-// // 🔹 Start server
-// const PORT = process.env.PORT || 5000;
-// app.listen(PORT, () => {
-//   console.log("\n" + "=".repeat(50));
-//   console.log(`🚀 Server is running on port ${PORT}`);
-//   console.log("=".repeat(50));
-//   console.log(`📍 Local: http://localhost:${PORT}`);
-//   console.log(`📚 Swagger Docs: http://localhost:${PORT}/api-docs`);
-//   console.log(`✅ Test endpoint: http://localhost:${PORT}/test`);
-//   console.log(`👥 Candidates API: http://localhost:${PORT}/api/candidates`);
-//   console.log(`📊 Demand API: http://localhost:${PORT}/api/demand`);
-//   console.log(`🔐 Login API: http://localhost:${PORT}/api/login`);
-//   console.log("=".repeat(50) + "\n");
-// });
