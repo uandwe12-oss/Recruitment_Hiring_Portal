@@ -7,26 +7,26 @@ const path = require('path');
 
 const app = express();
 
-// ✅ Enhanced CORS configuration
 const corsOptions = {
   origin: [
     'http://localhost:3000', 
     'http://localhost:3001', 
     'http://localhost:5173', 
-    'https://recruitment-hiring-portal-ibsf.vercel.app'
+    'https://recruitment-hiring-portal-ibsf.vercel.app',  // 👈 Old URL (keep it)
+    'https://recruitment-hiring-portal-ibsf-7ffylnjhd-uandwe12-oss-projects.vercel.app' // 👈 NEW URL - ADD THIS!
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept'],
   optionsSuccessStatus: 200
 };
-
 // Apply CORS globally
 app.use(cors(corsOptions));
 
 // ✅ FIXED: Use named wildcard parameter '/*splat' instead of '/*'
 app.options('/*splat', (req, res) => {
   res.header('Access-Control-Allow-Origin', 'https://recruitment-hiring-portal-ibsf.vercel.app');
+  res.header('Access-Control-Allow-Origin', 'https://recruitment-hiring-portal-ibsf-7ffylnjhd-uandwe12-oss-projects.vercel.app'); // 👈 Update this
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, X-Requested-With, Accept');
   res.header('Access-Control-Allow-Credentials', 'true');
