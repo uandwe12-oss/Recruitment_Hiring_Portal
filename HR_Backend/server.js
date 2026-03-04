@@ -18,7 +18,7 @@ app.use(cors({
 
 // ❌ REMOVE the custom preflight handler below
 // The cors() middleware already handles OPTIONS requests
-
+app.options('*', cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 //app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -42,7 +42,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: "http://localhost:5000",
+        url: "https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app",
         description: "Development server"
       }
     ]
