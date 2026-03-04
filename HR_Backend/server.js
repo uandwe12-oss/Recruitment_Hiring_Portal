@@ -30,7 +30,7 @@ const candidatesRoute = require("./api/candidates");
 const skillsRoute = require("./api/skills");
 const skillsMatchRoute = require("./api/skillsmatch");
 const shortcandidatesRoute = require("./api/shortcandidates");
-const userRoute = require("./api/user");
+const userRoute = require("./api/users");
 /* ================================
 ROUTE REGISTRATION
 ================================ */
