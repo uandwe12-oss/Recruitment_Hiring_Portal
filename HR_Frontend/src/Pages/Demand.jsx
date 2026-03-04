@@ -54,7 +54,7 @@ const Demand = () => {
 
   const fetchDemands = async () => {
     try {
-      const response = await fetch("https://recruitment-hiring-portal.vercel.app/api/demand");
+      const response = await fetch("http://localhost:5000/api/demand");
       if (!response.ok) throw new Error("Failed to fetch demands");
       const data = await response.json();
       setDemands(data);
@@ -159,7 +159,7 @@ const Demand = () => {
 
       console.log("📝 Sending demand data to backend:", demandToCreate);
 
-      const response = await fetch("https://recruitment-hiring-portal.vercel.app/api/demand", {
+      const response = await fetch("http://localhost:5000/api/demand", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -211,7 +211,7 @@ const Demand = () => {
     }
 
     try {
-      const response = await fetch(`https://recruitment-hiring-portal.vercel.app/api/demand/${demandId}`, {
+      const response = await fetch(`http://localhost:5000/api/demand/${demandId}`, {
         method: "DELETE",
       });
 
@@ -326,7 +326,7 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
       setIsSaving(true);
 
       const response = await fetch(
-        `https://recruitment-hiring-portal.vercel.app/api/demand/${editedDemand.id}`,
+        `http://localhost:5000/api/demand/${editedDemand.id}`,
         {
           method: "PUT",
           headers: {

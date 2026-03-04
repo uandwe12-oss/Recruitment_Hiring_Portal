@@ -40,7 +40,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
 const Recruiter = ({ user }) => {
-  console.log("🔍 Recruiter received user:", user); // ADD THIS LINE
+  console.log("🔍 Recruiter received user:", user);
   console.log("🔍 User role from props:", user?.role);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSkill, setSelectedSkill] = useState("All");
@@ -61,7 +61,7 @@ const Recruiter = ({ user }) => {
   const [pdfFile, setPdfFile] = useState(null);
   
   // Get user role from props
-  const userRole = user?.role || "recruiter"; // Default to recruiter if no user
+  const userRole = user?.role || "recruiter";
   
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -132,9 +132,10 @@ const Recruiter = ({ user }) => {
   // Edit profile skill suggestions
   const [showEditSkillSuggestions, setShowEditSkillSuggestions] = useState(false);
   const [filteredEditSkillSuggestions, setFilteredEditSkillSuggestions] = useState([]);
+  
   // Date picker state
-const [profileSubmissionDate, setProfileSubmissionDate] = useState(null);
-const [editProfileSubmissionDate, setEditProfileSubmissionDate] = useState(null);
+  const [profileSubmissionDate, setProfileSubmissionDate] = useState(null);
+  const [editProfileSubmissionDate, setEditProfileSubmissionDate] = useState(null);
   
   // Form state for new profile
   const [newProfile, setNewProfile] = useState({
@@ -169,193 +170,161 @@ const [editProfileSubmissionDate, setEditProfileSubmissionDate] = useState(null)
   const [formErrors, setFormErrors] = useState({});
 
   // Helper function to safely parse keySkills
-  // Helper function to safely parse keySkills
-const parseKeySkills = (skills) => {
-  if (!skills) return [];
-  
-  // If it's already an array
-  if (Array.isArray(skills)) {
-    return skills;
-  }
-  
-  // If it's a string
-  if (typeof skills === 'string') {
-    // Try to parse as JSON first (in case it's a JSON string)
-    try {
-      const parsed = JSON.parse(skills);
-      if (Array.isArray(parsed)) {
-        return parsed;
+  const parseKeySkills = (skills) => {
+    if (!skills) return [];
+    
+    if (Array.isArray(skills)) {
+      return skills;
+    }
+    
+    if (typeof skills === 'string') {
+      try {
+        const parsed = JSON.parse(skills);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch {
+        // Not JSON, continue with string handling
       }
-    } catch {
-      // Not JSON, continue with string handling
+      
+      if (!skills.includes(',')) {
+        return [skills.trim()];
+      }
+      
+      return skills.split(',').map(s => s.trim()).filter(s => s);
     }
     
-    // Check if it's a single skill (no commas)
-    if (!skills.includes(',')) {
-      return [skills.trim()];
-    }
-    
-    // Split by comma and clean up
-    return skills.split(',').map(s => s.trim()).filter(s => s);
-  }
-  
-  return [];
-};
-
-// Helper function to process candidate data
-const processCandidate = (candidate) => {
-  if (!candidate) return null;
-  
-  // Get the actual Can_ID from the database
-  const actualId = candidate.Can_ID || candidate.canId || candidate.id;
-  
-  // Create a new object with standardized property names
-  const processed = {
-    // Store the actual database ID separately for API calls
-    actualId: actualId ? Number(actualId) : null,
-    // Keep a display ID for UI purposes
-    id: actualId ? Number(actualId) : `temp-${Date.now()}-${Math.random()}`,
-    name: candidate['Candidate Name'] || candidate.name || '',
-    email: candidate.Email || candidate.email || '',
-    mobile: candidate['Mobile No'] || candidate.mobile || '',
-    experience: candidate.Experience || candidate.experience || '',
-    currentOrg: candidate['Current Org'] || candidate.currentOrg || '',
-    currentCTC: candidate['Current CTC'] || candidate.currentCTC || '',
-    expectedCTC: candidate['Expected CTC'] || candidate.expectedCTC || '',
-    noticePeriod: candidate['Notice Period in days'] || candidate.noticePeriod || '',
-    profileSourcedBy: candidate['Profiles sourced by'] || candidate.profileSourcedBy || '',
-    clientName: candidate['Client Name'] || candidate.clientName || '',
-    profileSubmissionDate: candidate['Profile submission date'] || candidate.profileSubmissionDate || '',
-    visaType: candidate['Visa type'] || candidate.visaType || 'NA',
-    // FIX: Set resumePath correctly
-    resumePath: candidate.resumePath || '',
-    // FIX: Add Google Drive links
-    googleDriveFileId: candidate.googleDriveFileId || '',
-    googleDriveViewLink: candidate.googleDriveViewLink || '',
-    googleDriveDownloadLink: candidate.googleDriveDownloadLink || '',
-    // Parse keySkills - handle both array and string formats
-    keySkills: parseKeySkills(candidate['Key Skills'] || candidate.keySkills)
+    return [];
   };
-  
-  // Ensure experience is a number for sorting
-  processed.experienceNum = parseFloat(processed.experience) || 0;
-  
-  return processed;
-};
+
+  // Helper function to process candidate data
+  const processCandidate = (candidate) => {
+    if (!candidate) return null;
+    
+    const actualId = candidate.Can_ID || candidate.canId || candidate.id;
+    
+    const processed = {
+      actualId: actualId ? Number(actualId) : null,
+      id: actualId ? Number(actualId) : `temp-${Date.now()}-${Math.random()}`,
+      name: candidate['Candidate Name'] || candidate.name || '',
+      email: candidate.Email || candidate.email || '',
+      mobile: candidate['Mobile No'] || candidate.mobile || '',
+      experience: candidate.Experience || candidate.experience || '',
+      currentOrg: candidate['Current Org'] || candidate.currentOrg || '',
+      currentCTC: candidate['Current CTC'] || candidate.currentCTC || '',
+      expectedCTC: candidate['Expected CTC'] || candidate.expectedCTC || '',
+      noticePeriod: candidate['Notice Period in days'] || candidate.noticePeriod || '',
+      profileSourcedBy: candidate['Profiles sourced by'] || candidate.profileSourcedBy || '',
+      clientName: candidate['Client Name'] || candidate.clientName || '',
+      profileSubmissionDate: candidate['Profile submission date'] || candidate.profileSubmissionDate || '',
+      visaType: candidate['Visa type'] || candidate.visaType || 'NA',
+      resumePath: candidate.resumePath || '',
+      googleDriveFileId: candidate.googleDriveFileId || '',
+      googleDriveViewLink: candidate.googleDriveViewLink || '',
+      googleDriveDownloadLink: candidate.googleDriveDownloadLink || '',
+      keySkills: parseKeySkills(candidate['Key Skills'] || candidate.keySkills)
+    };
+    
+    processed.experienceNum = parseFloat(processed.experience) || 0;
+    
+    return processed;
+  };
 
   // Update skill counts based on candidates
-  // Update skill counts based on candidates - but don't override API counts
-// This function is now only needed as a fallback
-const updateSkillCounts = (candidatesList) => {
-  // If we already have counts from API, don't recalculate
-  if (Object.keys(skillCounts).length > 0) {
-    return;
-  }
-  
-  const counts = {};
-  
-  // Initialize all skills from the API with count 0
-  skills.forEach(skill => {
-    counts[skill.name] = 0;
-  });
-  
-  // Count occurrences in candidates
-  candidatesList.forEach(candidate => {
-    if (candidate.keySkills && Array.isArray(candidate.keySkills)) {
-      candidate.keySkills.forEach(skill => {
-        if (skill && typeof skill === 'string') {
-          const trimmedSkill = skill.trim();
-          if (trimmedSkill) {
-            // Find the matching skill in our list (case-insensitive)
-            const matchingSkill = skills.find(s => 
-              s.name.toLowerCase() === trimmedSkill.toLowerCase()
-            );
-            
-            if (matchingSkill) {
-              counts[matchingSkill.name] = (counts[matchingSkill.name] || 0) + 1;
-            } else {
-              // If skill not in API list, still count it with its original name
-              counts[trimmedSkill] = (counts[trimmedSkill] || 0) + 1;
+  const updateSkillCounts = (candidatesList) => {
+    if (Object.keys(skillCounts).length > 0) {
+      return;
+    }
+    
+    const counts = {};
+    
+    skills.forEach(skill => {
+      counts[skill.name] = 0;
+    });
+    
+    candidatesList.forEach(candidate => {
+      if (candidate.keySkills && Array.isArray(candidate.keySkills)) {
+        candidate.keySkills.forEach(skill => {
+          if (skill && typeof skill === 'string') {
+            const trimmedSkill = skill.trim();
+            if (trimmedSkill) {
+              const matchingSkill = skills.find(s => 
+                s.name.toLowerCase() === trimmedSkill.toLowerCase()
+              );
+              
+              if (matchingSkill) {
+                counts[matchingSkill.name] = (counts[matchingSkill.name] || 0) + 1;
+              } else {
+                counts[trimmedSkill] = (counts[trimmedSkill] || 0) + 1;
+              }
             }
           }
-        }
-      });
-    }
-  });
-  
-  setSkillCounts(counts);
-};
-// Fetch skills data from API - UPDATED TO USE CORRECT ENDPOINT
-const fetchSkillsData = async () => {
-  try {
-    setSkillsLoading(true);
-    // CHANGE THIS TO USE THE CORRECT ENDPOINT
-    const response = await axios.get('http://localhost:5000/api/skillsmatch/skills');
-    console.log("Skills API response:", response.data);
+        });
+      }
+    });
     
-    if (response.data.success && response.data.data) {
-      // The API returns skills array with counts
-      const skillsList = response.data.data;
-      console.log(`Fetched ${skillsList.length} skills from API:`, skillsList);
+    setSkillCounts(counts);
+  };
+
+  // Fetch skills data from API
+  const fetchSkillsData = async () => {
+    try {
+      setSkillsLoading(true);
+      const response = await axios.get('http://localhost:5000/api/skillsmatch/skills');
+      console.log("Skills API response:", response.data);
       
-      // Store the skills
-      setSkills(skillsList);
-      setTotalSkills(response.data.totalSkills || skillsList.length);
-      
-      // Create a counts object from the API data
-      const countsFromApi = {};
-      skillsList.forEach(skill => {
-        // The skill object should have name and count properties
-        countsFromApi[skill.name] = skill.count || 0;
-      });
-      
-      // Set the skill counts
-      setSkillCounts(countsFromApi);
-      
-      // Extract skill names for suggestions
-      const allSkills = skillsList.map(item => item.name);
-      setSkillSuggestions(allSkills.sort());
-      
-    } else {
-      console.log("Skills API returned no data");
+      if (response.data.success && response.data.data) {
+        const skillsList = response.data.data;
+        console.log(`Fetched ${skillsList.length} skills from API:`, skillsList);
+        
+        setSkills(skillsList);
+        setTotalSkills(response.data.totalSkills || skillsList.length);
+        
+        const countsFromApi = {};
+        skillsList.forEach(skill => {
+          countsFromApi[skill.name] = skill.count || 0;
+        });
+        
+        setSkillCounts(countsFromApi);
+        
+        const allSkills = skillsList.map(item => item.name);
+        setSkillSuggestions(allSkills.sort());
+        
+      } else {
+        console.log("Skills API returned no data");
+        setSkills([]);
+        setTotalSkills(0);
+        setSkillSuggestions([]);
+        setSkillCounts({});
+      }
+    } catch (err) {
+      console.error('Error fetching skills data:', err);
       setSkills([]);
       setTotalSkills(0);
       setSkillSuggestions([]);
       setSkillCounts({});
+    } finally {
+      setSkillsLoading(false);
     }
-  } catch (err) {
-    console.error('Error fetching skills data:', err);
-    setSkills([]);
-    setTotalSkills(0);
-    setSkillSuggestions([]);
-    setSkillCounts({});
-  } finally {
-    setSkillsLoading(false);
-  }
-};
+  };
+
   // Fetch all candidates
   const fetchAllCandidates = async () => {
     try {
       setLoading(true);
->>>>>>> main
       setError(null);
       const response = await axios.get('http://localhost:5000/api/candidates/all');
       console.log("Candidates API response:", response.data);
       
-=======
-      const response = await axios.get('https://recruitment-hiring-portal.vercel.app/api/candidates');
->>>>>>> 2e9297ab124dd1a1ef480673d9a4773975fb2fcb
       if (response.data.success) {
-        // Process each candidate and filter out nulls
         const processedCandidates = response.data.data
           .map(processCandidate)
           .filter(c => c !== null);
         
-        // Sort by ID in DESCENDING order (newest first)
         processedCandidates.sort((a, b) => {
           const idA = a.id || 0;
           const idB = b.id || 0;
-          return idB - idA; // Descending order - newer IDs first
+          return idB - idA;
         });
         
         console.log(`Processed ${processedCandidates.length} candidates, sorted by ID (newest first)`);
@@ -364,7 +333,6 @@ const fetchSkillsData = async () => {
         setDisplayedCandidates(processedCandidates);
         setCurrentPage(1);
         
-        // Update skill counts with new candidates
         if (skills.length > 0) {
           updateSkillCounts(processedCandidates);
         }
@@ -379,136 +347,117 @@ const fetchSkillsData = async () => {
     }
   };
 
->>>>>>> main
-// Check if email exists (excluding current candidate)
-const checkEmailExists = async (email, excludeId = null) => {
-  try {
-    const url = `http://localhost:5000/api/candidates/check-email/${encodeURIComponent(email)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
-    const response = await axios.get(url);
-    return response.data.exists;
-  } catch (err) {
-    console.error('Error checking email:', err);
-    return false;
-  }
-};
+  // Check if email exists (excluding current candidate)
+  const checkEmailExists = async (email, excludeId = null) => {
+    try {
+      const url = `http://localhost:5000/api/candidates/check-email/${encodeURIComponent(email)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
+      const response = await axios.get(url);
+      return response.data.exists;
+    } catch (err) {
+      console.error('Error checking email:', err);
+      return false;
+    }
+  };
 
-// Check if mobile exists (excluding current candidate)
-const checkMobileExists = async (mobile, excludeId = null) => {
-  try {
-    // Remove non-digits for checking
-    const cleanMobile = mobile.replace(/\D/g, '');
-    const url = `http://localhost:5000/api/candidates/check-mobile/${encodeURIComponent(cleanMobile)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
-    const response = await axios.get(url);
-    return response.data.exists;
-  } catch (err) {
-    console.error('Error checking mobile:', err);
-    return false;
-  }
-};
+  // Check if mobile exists (excluding current candidate)
+  const checkMobileExists = async (mobile, excludeId = null) => {
+    try {
+      const cleanMobile = mobile.replace(/\D/g, '');
+      const url = `http://localhost:5000/api/candidates/check-mobile/${encodeURIComponent(cleanMobile)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
+      const response = await axios.get(url);
+      return response.data.exists;
+    } catch (err) {
+      console.error('Error checking mobile:', err);
+      return false;
+    }
+  };
 
   // Handle viewing candidate details
   const handleViewDetails = (candidate, e) => {
     if (e) {
       e.stopPropagation();
-=======
-  // Fetch skills data from API
-  const fetchSkillsData = async () => {
-    try {
-      const response = await axios.get('https://recruitment-hiring-portal.vercel.app/api/candidates/skills');
-      if (response.data.success) {
-        setSkillGroups(response.data.data);
-        setTotalSkills(response.data.totalSkills);
-      }
-    } catch (err) {
-      console.error('Error fetching skills data:', err);
->>>>>>> 2e9297ab124dd1a1ef480673d9a4773975fb2fcb
     }
     console.log("Viewing candidate:", candidate);
     setSelectedCandidate(candidate);
     setShowCandidateDetails(true);
   };
 
-// Handle viewing resume
-const handleViewResume = (candidate, e) => {
-  e.stopPropagation();
-  
-  console.log("Viewing resume for candidate:", candidate);
-  
-  // Check for Google Drive link first (preferred)
-  if (candidate.googleDriveViewLink) {
-    console.log("Opening Google Drive resume:", candidate.googleDriveViewLink);
-    setSelectedResumeUrl(candidate.googleDriveViewLink);
-    setShowResumeModal(true);
-  }
-  // Check for local resume path
-  else if (candidate.resumePath) {
-    // Ensure the URL is properly formatted
-    const resumeUrl = candidate.resumePath.startsWith('http') 
-      ? candidate.resumePath 
-      : `http://localhost:5000${candidate.resumePath}`;
+  // Handle viewing resume
+  const handleViewResume = (candidate, e) => {
+    e.stopPropagation();
     
-    console.log("Opening local resume:", resumeUrl);
-    setSelectedResumeUrl(resumeUrl);
-    setShowResumeModal(true);
-  }
-  else {
-    alert('No resume uploaded for this candidate');
-  }
-};
+    console.log("Viewing resume for candidate:", candidate);
+    
+    if (candidate.googleDriveViewLink) {
+      console.log("Opening Google Drive resume:", candidate.googleDriveViewLink);
+      setSelectedResumeUrl(candidate.googleDriveViewLink);
+      setShowResumeModal(true);
+    }
+    else if (candidate.resumePath) {
+      const resumeUrl = candidate.resumePath.startsWith('http') 
+        ? candidate.resumePath 
+        : `http://localhost:5000${candidate.resumePath}`;
+      
+      console.log("Opening local resume:", resumeUrl);
+      setSelectedResumeUrl(resumeUrl);
+      setShowResumeModal(true);
+    }
+    else {
+      alert('No resume uploaded for this candidate');
+    }
+  };
 
-// Handle edit click
-const handleEditClick = (candidate, e) => {
-  e.stopPropagation();
-  console.log("Editing candidate with ID:", candidate.id); 
-  console.log("Actual database ID:", candidate.actualId);
-  
-  // Make sure we have the correct ID for exclusion
-  const candidateId = candidate.actualId || candidate.id;
-  console.log("Using ID for exclusion:", candidateId);
-  
-  setEditingCandidate(candidate);
-  setEditFormData({
-    name: candidate.name || "",
-    email: candidate.email || "",
-    mobile: candidate.mobile || "",
-    experience: candidate.experience || "",
-    currentOrg: candidate.currentOrg || "",
-    currentCTC: candidate.currentCTC || "",
-    expectedCTC: candidate.expectedCTC || "",
-    noticePeriod: candidate.noticePeriod || "",
-    profileSourcedBy: candidate.profileSourcedBy || "",
-    clientName: candidate.clientName || "",
-    profileSubmissionDate: candidate.profileSubmissionDate || "",
-    keySkills: parseKeySkills(candidate.keySkills),
-    visaType: candidate.visaType || "NA",
-    resumePdf: null
-  });
-  
-  // Parse the date string to Date object for the date picker
-  if (candidate.profileSubmissionDate) {
-    // Parse date in format like "15-Mar-25"
-    const parts = candidate.profileSubmissionDate.split('-');
-    if (parts.length === 3) {
-      const day = parseInt(parts[0]);
-      const month = parts[1];
-      const year = parseInt('20' + parts[2]); // Convert '25' to '2025'
-      
-      const monthMap = {
-        'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-        'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-      };
-      
-      if (monthMap[month] !== undefined) {
-        const date = new Date(year, monthMap[month], day);
-        setEditProfileSubmissionDate(date);
+  // Handle edit click
+  const handleEditClick = (candidate, e) => {
+    e.stopPropagation();
+    console.log("Editing candidate with ID:", candidate.id); 
+    console.log("Actual database ID:", candidate.actualId);
+    
+    const candidateId = candidate.actualId || candidate.id;
+    console.log("Using ID for exclusion:", candidateId);
+    
+    setEditingCandidate(candidate);
+    setEditFormData({
+      name: candidate.name || "",
+      email: candidate.email || "",
+      mobile: candidate.mobile || "",
+      experience: candidate.experience || "",
+      currentOrg: candidate.currentOrg || "",
+      currentCTC: candidate.currentCTC || "",
+      expectedCTC: candidate.expectedCTC || "",
+      noticePeriod: candidate.noticePeriod || "",
+      profileSourcedBy: candidate.profileSourcedBy || "",
+      clientName: candidate.clientName || "",
+      profileSubmissionDate: candidate.profileSubmissionDate || "",
+      keySkills: parseKeySkills(candidate.keySkills),
+      visaType: candidate.visaType || "NA",
+      resumePdf: null
+    });
+    
+    if (candidate.profileSubmissionDate) {
+      const parts = candidate.profileSubmissionDate.split('-');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0]);
+        const month = parts[1];
+        const year = parseInt('20' + parts[2]);
+        
+        const monthMap = {
+          'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+          'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+        };
+        
+        if (monthMap[month] !== undefined) {
+          const date = new Date(year, monthMap[month], day);
+          setEditProfileSubmissionDate(date);
+        }
       }
     }
-  }
-  
-  setEditPdfFile(null);
-  setEditFormErrors({});
-  setShowEditModal(true);
-};
+    
+    setEditPdfFile(null);
+    setEditFormErrors({});
+    setShowEditModal(true);
+  };
+
   // Handle edit input change
   const handleEditInputChange = (e) => {
     const { name, value } = e.target;
@@ -524,7 +473,6 @@ const handleEditClick = (candidate, e) => {
     setEditSkillInput(value);
     setSelectedEditSkillSuggestionIndex(0);
     
-    // Get the last part after comma for suggestions
     const lastPart = value.split(',').pop().trim();
     
     if (lastPart) {
@@ -552,11 +500,9 @@ const handleEditClick = (candidate, e) => {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (filteredEditSkillSuggestions.length > 0 && selectedEditSkillSuggestionIndex >= 0) {
-        // Select the highlighted suggestion
         const indexToUse = selectedEditSkillSuggestionIndex >= 0 ? selectedEditSkillSuggestionIndex : 0;
         handleEditSkillAdd(filteredEditSkillSuggestions[indexToUse]);
       } else if (editSkillInput.trim()) {
-        // Add as new skill (could be comma-separated)
         handleEditSkillAdd();
       }
     } else if (e.key === 'Escape') {
@@ -565,58 +511,55 @@ const handleEditClick = (candidate, e) => {
     }
   };
 
-// Handle edit skill add
-const handleEditSkillAdd = (skillToAdd = null) => {
-  const skill = skillToAdd || editSkillInput.trim();
-  
-  if (!skill) return;
-  
-  // Handle comma-separated input
-  if (skill.includes(',')) {
-    const skills = skill.split(',').map(s => s.trim()).filter(s => s);
-    skills.forEach(s => {
-      // Check if skill exists in the API skills list
+  // Handle edit skill add
+  const handleEditSkillAdd = (skillToAdd = null) => {
+    const skill = skillToAdd || editSkillInput.trim();
+    
+    if (!skill) return;
+    
+    if (skill.includes(',')) {
+      const skills = skill.split(',').map(s => s.trim()).filter(s => s);
+      skills.forEach(s => {
+        const skillExists = skillSuggestions.some(
+          existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
+        );
+        
+        if (skillExists) {
+          if (!editFormData.keySkills.includes(s)) {
+            setEditFormData(prev => ({
+              ...prev,
+              keySkills: [...prev.keySkills, s]
+            }));
+          }
+        } else {
+          alert(`"${s}" is not a valid skill. Please select from the suggestions.`);
+        }
+      });
+    } else {
       const skillExists = skillSuggestions.some(
-        existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
+        existingSkill => existingSkill.toLowerCase() === skill.toLowerCase()
       );
       
       if (skillExists) {
-        if (!editFormData.keySkills.includes(s)) {
+        if (!editFormData.keySkills.includes(skill)) {
           setEditFormData(prev => ({
             ...prev,
-            keySkills: [...prev.keySkills, s]
+            keySkills: [...prev.keySkills, skill]
           }));
         }
       } else {
-        alert(`"${s}" is not a valid skill. Please select from the suggestions.`);
+        alert(`"${skill}" is not a valid skill. Please select from the suggestions.`);
       }
-    });
-  } else {
-    // Check if skill exists in the API skills list
-    const skillExists = skillSuggestions.some(
-      existingSkill => existingSkill.toLowerCase() === skill.toLowerCase()
-    );
-    
-    if (skillExists) {
-      if (!editFormData.keySkills.includes(skill)) {
-        setEditFormData(prev => ({
-          ...prev,
-          keySkills: [...prev.keySkills, skill]
-        }));
-      }
-    } else {
-      alert(`"${skill}" is not a valid skill. Please select from the suggestions.`);
     }
-  }
-  
-  if (editFormErrors.keySkills) {
-    setEditFormErrors(prev => ({ ...prev, keySkills: null }));
-  }
-  
-  setEditSkillInput("");
-  setShowEditSkillSuggestions(false);
-  setSelectedEditSkillSuggestionIndex(0);
-};
+    
+    if (editFormErrors.keySkills) {
+      setEditFormErrors(prev => ({ ...prev, keySkills: null }));
+    }
+    
+    setEditSkillInput("");
+    setShowEditSkillSuggestions(false);
+    setSelectedEditSkillSuggestionIndex(0);
+  };
 
   // Handle edit skill remove
   const handleEditSkillRemove = (skillToRemove) => {
@@ -627,182 +570,168 @@ const handleEditSkillAdd = (skillToAdd = null) => {
   };
 
   // Handle edit PDF upload - WITH SIZE VALIDATION
-const handleEditPdfUpload = (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    // Check file type
-    if (file.type !== 'application/pdf') {
-      alert('Please upload a PDF file');
-      e.target.value = ''; // Clear the input
-      return;
-    }
-    
-    // Check file size (100KB = 100 * 1024 bytes)
-    const maxSize = 100 * 1024; // 100KB in bytes
-    if (file.size > maxSize) {
-      alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
-      e.target.value = ''; // Clear the input
-      return;
-    }
-    
-    // If all validations pass
-    setEditPdfFile(file);
-    setEditFormData(prev => ({ ...prev, resumePdf: file }));
-  }
-};
-
-// Validate edit form - SKIP email/mobile existence check during edit
-const validateEditForm = async () => {
-  const errors = {};
-  
-  if (!editFormData.name?.trim()) {
-    errors.name = "Name is required";
-  }
-  
-  if (!editFormData.email?.trim()) {
-    errors.email = "Email is required";
-  } else if (!/\S+@\S+\.\S+/.test(editFormData.email)) {
-    errors.email = "Email is invalid";
-  }
-  // REMOVED email existence check
-  
-  if (!editFormData.mobile?.trim()) {
-    errors.mobile = "Mobile number is required";
-  } else if (!/^[0-9+\-\s]{10,15}$/.test(editFormData.mobile)) {
-    errors.mobile = "Mobile number is invalid";
-  }
-  // REMOVED mobile existence check
-  
-  if (editFormData.keySkills.length === 0) {
-    errors.keySkills = "At least one skill is required";
-  }
-  
-  return errors;
-};
-
-
-
-// Handle update profile
-const handleUpdateProfile = async () => {
-  const errors = await validateEditForm();
-  if (Object.keys(errors).length > 0) {
-    setEditFormErrors(errors);
-    return;
-  }
-
-  try {
-    setEditLoading(true);
-    setEditFormErrors({});
-    
-    // Create FormData for file upload
-    const formData = new FormData();
-    formData.append('name', editFormData.name);
-    formData.append('email', editFormData.email);
-    formData.append('mobile', editFormData.mobile);
-    formData.append('experience', editFormData.experience || '');
-    formData.append('currentOrg', editFormData.currentOrg || '');
-    formData.append('currentCTC', editFormData.currentCTC || '');
-    formData.append('expectedCTC', editFormData.expectedCTC || '');
-    formData.append('noticePeriod', editFormData.noticePeriod || '');
-    formData.append('profileSourcedBy', editFormData.profileSourcedBy || '');
-    formData.append('clientName', editFormData.clientName || '');
-    
-    // Format the date if it exists from edit date picker
-    if (editProfileSubmissionDate) {
-      const day = editProfileSubmissionDate.getDate().toString().padStart(2, '0');
-      const month = editProfileSubmissionDate.toLocaleString('default', { month: 'short' });
-      const year = editProfileSubmissionDate.getFullYear().toString().slice(-2);
-      const formattedDate = `${day}-${month}-${year}`;
-      formData.append('profileSubmissionDate', formattedDate);
-    } else {
-      // Keep existing date if no change
-      formData.append('profileSubmissionDate', editFormData.profileSubmissionDate || '');
-    }
-    
-    formData.append('keySkills', JSON.stringify(editFormData.keySkills));
-    formData.append('visaType', editFormData.visaType || 'NA');
-    
-    if (editPdfFile) {
-      formData.append('resume', editPdfFile);
-    }
-    
-    // FIX: Use the actual database ID, not the display ID
-    const candidateId = editingCandidate?.actualId || editingCandidate?.id;
-    if (!candidateId || typeof candidateId === 'string' && candidateId.startsWith('temp-')) {
-      throw new Error("Invalid candidate ID - cannot update temporary record");
-    }
-    
-    console.log("Updating candidate with actual database ID:", candidateId);
-    
-    const response = await axios.put(`http://localhost:5000/api/candidates/${candidateId}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
+  const handleEditPdfUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        alert('Please upload a PDF file');
+        e.target.value = '';
+        return;
       }
-    });
+      
+      const maxSize = 100 * 1024;
+      if (file.size > maxSize) {
+        alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
+        e.target.value = '';
+        return;
+      }
+      
+      setEditPdfFile(file);
+      setEditFormData(prev => ({ ...prev, resumePdf: file }));
+    }
+  };
+
+  // Validate edit form
+  const validateEditForm = async () => {
+    const errors = {};
     
-    if (response.data.success) {
-      setSuccessMessage("Profile updated successfully!");
+    if (!editFormData.name?.trim()) {
+      errors.name = "Name is required";
+    }
+    
+    if (!editFormData.email?.trim()) {
+      errors.email = "Email is required";
+    } else if (!/\S+@\S+\.\S+/.test(editFormData.email)) {
+      errors.email = "Email is invalid";
+    }
+    
+    if (!editFormData.mobile?.trim()) {
+      errors.mobile = "Mobile number is required";
+    } else if (!/^[0-9+\-\s]{10,15}$/.test(editFormData.mobile)) {
+      errors.mobile = "Mobile number is invalid";
+    }
+    
+    if (editFormData.keySkills.length === 0) {
+      errors.keySkills = "At least one skill is required";
+    }
+    
+    return errors;
+  };
+
+  // Handle update profile
+  const handleUpdateProfile = async () => {
+    const errors = await validateEditForm();
+    if (Object.keys(errors).length > 0) {
+      setEditFormErrors(errors);
+      return;
+    }
+
+    try {
+      setEditLoading(true);
+      setEditFormErrors({});
       
-      // Refresh data
-      await fetchAllCandidates();
+      const formData = new FormData();
+      formData.append('name', editFormData.name);
+      formData.append('email', editFormData.email);
+      formData.append('mobile', editFormData.mobile);
+      formData.append('experience', editFormData.experience || '');
+      formData.append('currentOrg', editFormData.currentOrg || '');
+      formData.append('currentCTC', editFormData.currentCTC || '');
+      formData.append('expectedCTC', editFormData.expectedCTC || '');
+      formData.append('noticePeriod', editFormData.noticePeriod || '');
+      formData.append('profileSourcedBy', editFormData.profileSourcedBy || '');
+      formData.append('clientName', editFormData.clientName || '');
       
-      // Update selected candidates if this candidate is in the list
-      setSelectedCandidates(prev => 
-        prev.map(c => c.id === editingCandidate.id ? processCandidate({ ...c, ...editFormData }) : c)
-      );
+      if (editProfileSubmissionDate) {
+        const day = editProfileSubmissionDate.getDate().toString().padStart(2, '0');
+        const month = editProfileSubmissionDate.toLocaleString('default', { month: 'short' });
+        const year = editProfileSubmissionDate.getFullYear().toString().slice(-2);
+        const formattedDate = `${day}-${month}-${year}`;
+        formData.append('profileSubmissionDate', formattedDate);
+      } else {
+        formData.append('profileSubmissionDate', editFormData.profileSubmissionDate || '');
+      }
       
-      setTimeout(() => {
-        setShowEditModal(false);
-        setSuccessMessage("");
-        setEditingCandidate(null);
-        setEditFormData({
-          name: "",
-          email: "",
-          mobile: "",
-          experience: "",
-          currentOrg: "",
-          currentCTC: "",
-          expectedCTC: "",
-          noticePeriod: "",
-          profileSourcedBy: "",
-          clientName: "",
-          profileSubmissionDate: "",
-          keySkills: [],
-          visaType: "NA",
-          resumePdf: null
+      formData.append('keySkills', JSON.stringify(editFormData.keySkills));
+      formData.append('visaType', editFormData.visaType || 'NA');
+      
+      if (editPdfFile) {
+        formData.append('resume', editPdfFile);
+      }
+      
+      const candidateId = editingCandidate?.actualId || editingCandidate?.id;
+      if (!candidateId || typeof candidateId === 'string' && candidateId.startsWith('temp-')) {
+        throw new Error("Invalid candidate ID - cannot update temporary record");
+      }
+      
+      console.log("Updating candidate with actual database ID:", candidateId);
+      
+      const response = await axios.put(`http://localhost:5000/api/candidates/${candidateId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      if (response.data.success) {
+        setSuccessMessage("Profile updated successfully!");
+        
+        await fetchAllCandidates();
+        
+        setSelectedCandidates(prev => 
+          prev.map(c => c.id === editingCandidate.id ? processCandidate({ ...c, ...editFormData }) : c)
+        );
+        
+        setTimeout(() => {
+          setShowEditModal(false);
+          setSuccessMessage("");
+          setEditingCandidate(null);
+          setEditFormData({
+            name: "",
+            email: "",
+            mobile: "",
+            experience: "",
+            currentOrg: "",
+            currentCTC: "",
+            expectedCTC: "",
+            noticePeriod: "",
+            profileSourcedBy: "",
+            clientName: "",
+            profileSubmissionDate: "",
+            keySkills: [],
+            visaType: "NA",
+            resumePdf: null
+          });
+          setEditProfileSubmissionDate(null);
+          setEditSkillInput("");
+          setEditPdfFile(null);
+        }, 1000);
+      }
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      
+      if (err.response) {
+        console.error('Response data:', err.response.data);
+        console.error('Response status:', err.response.status);
+        console.error('Response headers:', err.response.headers);
+        
+        setEditFormErrors({
+          submit: err.response.data?.message || `Server error: ${err.response.status}`
         });
-        setEditProfileSubmissionDate(null); // Reset edit date picker
-        setEditSkillInput("");
-        setEditPdfFile(null);
-      }, 1000);
+      } else if (err.request) {
+        console.error('No response received:', err.request);
+        setEditFormErrors({
+          submit: "No response from server. Please check if backend is running."
+        });
+      } else {
+        console.error('Error setting up request:', err.message);
+        setEditFormErrors({
+          submit: err.message || "Failed to update profile. Please try again."
+        });
+      }
+    } finally {
+      setEditLoading(false);
     }
-  } catch (err) {
-    console.error('Error updating profile:', err);
-    
-    // More detailed error logging
-    if (err.response) {
-      console.error('Response data:', err.response.data);
-      console.error('Response status:', err.response.status);
-      console.error('Response headers:', err.response.headers);
-      
-      setEditFormErrors({
-        submit: err.response.data?.message || `Server error: ${err.response.status}`
-      });
-    } else if (err.request) {
-      console.error('No response received:', err.request);
-      setEditFormErrors({
-        submit: "No response from server. Please check if backend is running."
-      });
-    } else {
-      console.error('Error setting up request:', err.message);
-      setEditFormErrors({
-        submit: err.message || "Failed to update profile. Please try again."
-      });
-    }
-  } finally {
-    setEditLoading(false);
-  }
-};
+  };
 
   // Handle delete click
   const handleDeleteClick = (candidate, e) => {
@@ -827,21 +756,15 @@ const handleUpdateProfile = async () => {
     }
 
     try {
->>>>>>> main      setDeleteLoading(true);
+      setDeleteLoading(true);
       
       const response = await axios.delete(`http://localhost:5000/api/candidates/${deletingCandidateId}`);
-=======
-      setFilterLoading(true);
-      const response = await axios.get(`https://recruitment-hiring-portal.vercel.app/api/candidates/skill/${encodeURIComponent(skill)}`);
->>>>>>> 2e9297ab124dd1a1ef480673d9a4773975fb2fcb
       
       if (response.data.success) {
         setSuccessMessage("Profile deleted successfully!");
         
-        // Refresh data
         await fetchAllCandidates();
         
-        // Remove from selected candidates if present
         setSelectedCandidates(prev => prev.filter(c => c.id !== deletingCandidateId));
         
         setTimeout(() => {
@@ -885,72 +808,66 @@ const handleUpdateProfile = async () => {
     });
   };
 
-
   // Filter candidates by skill
-const filterCandidatesBySkill = async (skill) => {
-  if (skill === "All") {
-    setDisplayedCandidates(candidates);
-    setSelectedSkill("All");
-    setCurrentPage(1);
-    setSearchTerm("");
-    return;
-  }
+  const filterCandidatesBySkill = async (skill) => {
+    if (skill === "All") {
+      setDisplayedCandidates(candidates);
+      setSelectedSkill("All");
+      setCurrentPage(1);
+      setSearchTerm("");
+      return;
+    }
 
-  try {
-    setFilterLoading(true);
-    setError(null);
-    
-    // This is correct - using the skillsmatch endpoint
-    const response = await axios.get(`http://localhost:5000/api/skillsmatch?skill=${encodeURIComponent(skill)}`);
-    
-    if (response.data.success) {
-      // The API returns candidates in data array
-      const apiCandidates = response.data.data || [];
+    try {
+      setFilterLoading(true);
+      setError(null);
       
-      // Process each candidate
-      const parsedCandidates = apiCandidates
-        .map(processCandidate)
-        .filter(c => c !== null);
+      const response = await axios.get(`http://localhost:5000/api/skillsmatch?skill=${encodeURIComponent(skill)}`);
       
-      // Sort by ID in DESCENDING order (newest first)
-      parsedCandidates.sort((a, b) => {
+      if (response.data.success) {
+        const apiCandidates = response.data.data || [];
+        
+        const parsedCandidates = apiCandidates
+          .map(processCandidate)
+          .filter(c => c !== null);
+        
+        parsedCandidates.sort((a, b) => {
+          const idA = a.id || 0;
+          const idB = b.id || 0;
+          return idB - idA;
+        });
+        
+        setDisplayedCandidates(parsedCandidates);
+        setCurrentPage(1);
+        setSelectedSkill(skill);
+        setSearchTerm("");
+        
+        console.log(`Filtered to ${parsedCandidates.length} candidates with skill: ${skill}`);
+      }
+    } catch (err) {
+      console.error('Error filtering candidates:', err);
+      setError(`Failed to filter by skill: ${err.message}`);
+      
+      const localFiltered = candidates.filter(candidate => 
+        candidate.keySkills && Array.isArray(candidate.keySkills) &&
+        candidate.keySkills.some(s => s && s.toLowerCase() === skill.toLowerCase())
+      );
+      
+      localFiltered.sort((a, b) => {
         const idA = a.id || 0;
         const idB = b.id || 0;
         return idB - idA;
       });
       
-      setDisplayedCandidates(parsedCandidates);
+      setDisplayedCandidates(localFiltered);
       setCurrentPage(1);
       setSelectedSkill(skill);
       setSearchTerm("");
-      
-      console.log(`Filtered to ${parsedCandidates.length} candidates with skill: ${skill}`);
+    } finally {
+      setFilterLoading(false);
     }
-  } catch (err) {
-    console.error('Error filtering candidates:', err);
-    setError(`Failed to filter by skill: ${err.message}`);
-    
-    // Fallback: filter locally
-    const localFiltered = candidates.filter(candidate => 
-      candidate.keySkills && Array.isArray(candidate.keySkills) &&
-      candidate.keySkills.some(s => s && s.toLowerCase() === skill.toLowerCase())
-    );
-    
-    // Sort by ID in DESCENDING order
-    localFiltered.sort((a, b) => {
-      const idA = a.id || 0;
-      const idB = b.id || 0;
-      return idB - idA;
-    });
-    
-    setDisplayedCandidates(localFiltered);
-    setCurrentPage(1);
-    setSelectedSkill(skill);
-    setSearchTerm("");
-  } finally {
-    setFilterLoading(false);
-  }
-};
+  };
+
   const handleSkillSelect = (skill) => {
     filterCandidatesBySkill(skill);
   };
@@ -964,7 +881,6 @@ const filterCandidatesBySkill = async (skill) => {
       return;
     }
     
-    // Check if already selected
     const isAlreadySelected = selectedCandidates.some(c => c.id === candidate.id);
     
     if (!isAlreadySelected) {
@@ -994,273 +910,246 @@ const filterCandidatesBySkill = async (skill) => {
     window.open(`https://wa.me/${mobile.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
-// Handle PDF file upload - WITH SIZE VALIDATION
-const handlePdfUpload = (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    // Check file type
-    if (file.type !== 'application/pdf') {
-      alert('Please upload a PDF file');
-      e.target.value = ''; // Clear the input
-      return;
-    }
-    
-    // Check file size (100KB = 100 * 1024 bytes)
-    const maxSize = 100 * 1024; // 100KB in bytes
-    if (file.size > maxSize) {
-      alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
-      e.target.value = ''; // Clear the input
-      return;
-    }
-    
-    // If all validations pass
-    setPdfFile(file);
-    setNewProfile(prev => ({ ...prev, resumePdf: file }));
-  }
-};
-
-// Handle add skill input change with suggestions
-const handleAddSkillInputChange = (e) => {
-  const value = e.target.value;
-  setSkillInput(value);
-  setSelectedAddSkillSuggestionIndex(0);
-  
-  // Get the last part after comma for suggestions
-  const lastPart = value.split(',').pop().trim();
-  
-  if (lastPart) {
-    // Filter from the API-fetched skills
-    const filtered = skillSuggestions.filter(skill => 
-      skill.toLowerCase().includes(lastPart.toLowerCase())
-    );
-    setFilteredAddSkillSuggestions(filtered);
-    setShowAddSkillSuggestions(true);
-  } else {
-    setFilteredAddSkillSuggestions([]);
-    setShowAddSkillSuggestions(false);
-  }
-};
-
-// Handle add skill key down for navigation
-const handleAddSkillKeyDown = (e) => {
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    setSelectedAddSkillSuggestionIndex(prev => 
-      prev < filteredAddSkillSuggestions.length - 1 ? prev + 1 : prev
-    );
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    setSelectedAddSkillSuggestionIndex(prev => prev > 0 ? prev - 1 : 0);
-  } else if (e.key === 'Enter') {
-    e.preventDefault();
-    
-    // Check if we have suggestions and a selected index
-    if (filteredAddSkillSuggestions.length > 0) {
-      // Use the selected suggestion if available, otherwise use the first one
-      const indexToUse = selectedAddSkillSuggestionIndex >= 0 ? selectedAddSkillSuggestionIndex : 0;
-      const selectedSkill = filteredAddSkillSuggestions[indexToUse];
-      
-      // Add the selected skill
-      if (!newProfile.keySkills.includes(selectedSkill)) {
-        setNewProfile(prev => ({
-          ...prev,
-          keySkills: [...prev.keySkills, selectedSkill]
-        }));
+  // Handle PDF file upload
+  const handlePdfUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        alert('Please upload a PDF file');
+        e.target.value = '';
+        return;
       }
       
-      // Clear form errors if any
-      if (formErrors.keySkills) {
-        setFormErrors(prev => ({ ...prev, keySkills: null }));
+      const maxSize = 100 * 1024;
+      if (file.size > maxSize) {
+        alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
+        e.target.value = '';
+        return;
       }
       
-      // Clear input and close suggestions
-      setSkillInput("");
+      setPdfFile(file);
+      setNewProfile(prev => ({ ...prev, resumePdf: file }));
+    }
+  };
+
+  // Handle add skill input change with suggestions
+  const handleAddSkillInputChange = (e) => {
+    const value = e.target.value;
+    setSkillInput(value);
+    setSelectedAddSkillSuggestionIndex(0);
+    
+    const lastPart = value.split(',').pop().trim();
+    
+    if (lastPart) {
+      const filtered = skillSuggestions.filter(skill => 
+        skill.toLowerCase().includes(lastPart.toLowerCase())
+      );
+      setFilteredAddSkillSuggestions(filtered);
+      setShowAddSkillSuggestions(true);
+    } else {
+      setFilteredAddSkillSuggestions([]);
       setShowAddSkillSuggestions(false);
-      setSelectedAddSkillSuggestionIndex(0);
-    } 
-    // If no suggestions but there's input, SHOW ERROR MESSAGE INSTEAD OF ADDING
-    else if (skillInput.trim()) {
-      const input = skillInput.trim();
+    }
+  };
+
+  // Handle add skill key down for navigation
+  const handleAddSkillKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedAddSkillSuggestionIndex(prev => 
+        prev < filteredAddSkillSuggestions.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedAddSkillSuggestionIndex(prev => prev > 0 ? prev - 1 : 0);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
       
-      // Check if the input contains commas (multiple skills)
-      if (input.includes(',')) {
-        const skills = input.split(',').map(s => s.trim()).filter(s => s);
-        let invalidSkills = [];
+      if (filteredAddSkillSuggestions.length > 0) {
+        const indexToUse = selectedAddSkillSuggestionIndex >= 0 ? selectedAddSkillSuggestionIndex : 0;
+        const selectedSkill = filteredAddSkillSuggestions[indexToUse];
         
-        skills.forEach(s => {
-          const skillExists = skillSuggestions.some(
-            existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
-          );
-          if (!skillExists) {
-            invalidSkills.push(s);
-          }
-        });
+        if (!newProfile.keySkills.includes(selectedSkill)) {
+          setNewProfile(prev => ({
+            ...prev,
+            keySkills: [...prev.keySkills, selectedSkill]
+          }));
+        }
         
-        if (invalidSkills.length > 0) {
-          alert(`The following skills are not in the database: ${invalidSkills.join(', ')}. Only skills from the database can be added.`);
-        } else {
-          // All skills are valid - add them
+        if (formErrors.keySkills) {
+          setFormErrors(prev => ({ ...prev, keySkills: null }));
+        }
+        
+        setSkillInput("");
+        setShowAddSkillSuggestions(false);
+        setSelectedAddSkillSuggestionIndex(0);
+      } 
+      else if (skillInput.trim()) {
+        const input = skillInput.trim();
+        
+        if (input.includes(',')) {
+          const skills = input.split(',').map(s => s.trim()).filter(s => s);
+          let invalidSkills = [];
+          
           skills.forEach(s => {
-            if (!newProfile.keySkills.includes(s)) {
-              setNewProfile(prev => ({
-                ...prev,
-                keySkills: [...prev.keySkills, s]
-              }));
+            const skillExists = skillSuggestions.some(
+              existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
+            );
+            if (!skillExists) {
+              invalidSkills.push(s);
             }
           });
           
-          // Clear form errors if any
-          if (formErrors.keySkills) {
-            setFormErrors(prev => ({ ...prev, keySkills: null }));
+          if (invalidSkills.length > 0) {
+            alert(`The following skills are not in the database: ${invalidSkills.join(', ')}. Only skills from the database can be added.`);
+          } else {
+            skills.forEach(s => {
+              if (!newProfile.keySkills.includes(s)) {
+                setNewProfile(prev => ({
+                  ...prev,
+                  keySkills: [...prev.keySkills, s]
+                }));
+              }
+            });
+            
+            if (formErrors.keySkills) {
+              setFormErrors(prev => ({ ...prev, keySkills: null }));
+            }
+            
+            setSkillInput("");
+            setShowAddSkillSuggestions(false);
+            setSelectedAddSkillSuggestionIndex(0);
           }
+        } else {
+          const skillExists = skillSuggestions.some(
+            existingSkill => existingSkill.toLowerCase() === input.toLowerCase()
+          );
           
-          // Clear input and close suggestions
-          setSkillInput("");
-          setShowAddSkillSuggestions(false);
-          setSelectedAddSkillSuggestionIndex(0);
+          if (skillExists) {
+            if (!newProfile.keySkills.includes(input)) {
+              setNewProfile(prev => ({
+                ...prev,
+                keySkills: [...prev.keySkills, input]
+              }));
+            }
+            
+            if (formErrors.keySkills) {
+              setFormErrors(prev => ({ ...prev, keySkills: null }));
+            }
+            
+            setSkillInput("");
+            setShowAddSkillSuggestions(false);
+            setSelectedAddSkillSuggestionIndex(0);
+          } else {
+            alert(`"${input}" is not in the skills database. Only skills from the database can be added.`);
+            setShowAddSkillSuggestions(false);
+            setSelectedAddSkillSuggestionIndex(0);
+          }
         }
-      } else {
-        // Single skill - check if it exists
+      }
+    } else if (e.key === 'Escape') {
+      setShowAddSkillSuggestions(false);
+      setSelectedAddSkillSuggestionIndex(0);
+    }
+  };
+
+  // Helper function to get border color based on visa type
+  const getVisaBorderColor = (visaType) => {
+    if (!visaType || visaType === "NA") return "border-gray-200";
+    
+    switch(visaType.toUpperCase()) {
+      case "H1B":
+        return "border-blue-500 border-2";
+      case "L1":
+        return "border-green-500 border-2";
+      case "GREEN CARD":
+        return "border-purple-500 border-2";
+      case "CITIZEN":
+        return "border-yellow-500 border-2";
+      default:
+        return "border-orange-500 border-2";
+    }
+  };
+
+  // Handle adding a new skill from input
+  const handleAddSkill = (skillToAdd = null) => {
+    const skill = skillToAdd || skillInput.trim();
+    
+    if (!skill) return;
+    
+    if (skill.includes(',')) {
+      const skills = skill.split(',').map(s => s.trim()).filter(s => s);
+      skills.forEach(s => {
         const skillExists = skillSuggestions.some(
-          existingSkill => existingSkill.toLowerCase() === input.toLowerCase()
+          existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
         );
         
         if (skillExists) {
-          if (!newProfile.keySkills.includes(input)) {
+          if (!newProfile.keySkills.includes(s)) {
             setNewProfile(prev => ({
               ...prev,
-              keySkills: [...prev.keySkills, input]
+              keySkills: [...prev.keySkills, s]
             }));
           }
-          
-          // Clear form errors if any
-          if (formErrors.keySkills) {
-            setFormErrors(prev => ({ ...prev, keySkills: null }));
-          }
-          
-          // Clear input and close suggestions
-          setSkillInput("");
-          setShowAddSkillSuggestions(false);
-          setSelectedAddSkillSuggestionIndex(0);
         } else {
-          // Show error message
-          alert(`"${input}" is not in the skills database. Only skills from the database can be added.`);
-          
-          // Keep the input visible so user can see what they typed
-          // Don't clear the input
-          setShowAddSkillSuggestions(false);
-          setSelectedAddSkillSuggestionIndex(0);
+          alert(`"${s}" is not a valid skill. Please select from the suggestions.`);
         }
-      }
-    }
-  } else if (e.key === 'Escape') {
-    setShowAddSkillSuggestions(false);
-    setSelectedAddSkillSuggestionIndex(0);
-  }
-};
-
-// Helper function to get border color based on visa type
-const getVisaBorderColor = (visaType) => {
-  if (!visaType || visaType === "NA") return "border-gray-200"; // Default border
-  
-  switch(visaType.toUpperCase()) {
-    case "H1B":
-      return "border-blue-500 border-2"; // Blue border for H1B
-    case "L1":
-      return "border-green-500 border-2"; // Green border for L1
-    case "GREEN CARD":
-      return "border-purple-500 border-2"; // Purple border for Green Card
-    case "CITIZEN":
-      return "border-yellow-500 border-2"; // Yellow border for Citizen
-    default:
-      return "border-orange-500 border-2"; // Orange border for Other visa types
-  }
-};
-// Handle adding a new skill from input (for add profile form)
-const handleAddSkill = (skillToAdd = null) => {
-  const skill = skillToAdd || skillInput.trim();
-  
-  if (!skill) return;
-  
-  // Handle comma-separated input
-  if (skill.includes(',')) {
-    const skills = skill.split(',').map(s => s.trim()).filter(s => s);
-    skills.forEach(s => {
-      // Check if skill exists in the API skills list
+      });
+    } else {
       const skillExists = skillSuggestions.some(
-        existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
+        existingSkill => existingSkill.toLowerCase() === skill.toLowerCase()
       );
       
       if (skillExists) {
-        if (!newProfile.keySkills.includes(s)) {
+        if (!newProfile.keySkills.includes(skill)) {
           setNewProfile(prev => ({
             ...prev,
-            keySkills: [...prev.keySkills, s]
+            keySkills: [...prev.keySkills, skill]
           }));
         }
       } else {
-        alert(`"${s}" is not a valid skill. Please select from the suggestions.`);
+        alert(`"${skill}" is not a valid skill. Please select from the suggestions.`);
       }
-    });
-  } else {
-    // Check if skill exists in the API skills list
-    const skillExists = skillSuggestions.some(
-      existingSkill => existingSkill.toLowerCase() === skill.toLowerCase()
-    );
+    }
     
-    if (skillExists) {
-      if (!newProfile.keySkills.includes(skill)) {
-        setNewProfile(prev => ({
-          ...prev,
-          keySkills: [...prev.keySkills, skill]
-        }));
+    if (formErrors.keySkills) {
+      setFormErrors(prev => ({ ...prev, keySkills: null }));
+    }
+    
+    setSkillInput("");
+    setShowAddSkillSuggestions(false);
+    setSelectedAddSkillSuggestionIndex(0);
+  };
+
+  // Handle deleting skill
+  const handleDeleteSkill = async (skillName, e) => {
+    e.stopPropagation();
+    
+    if (!window.confirm(`Are you sure you want to delete the skill "${skillName}"?`)) {
+      return;
+    }
+
+    try {
+      setSkillsLoading(true);
+      const response = await axios.delete(`http://localhost:5000/api/skills/${encodeURIComponent(skillName)}`);
+
+      if (response.data.success) {
+        await fetchSkillsData();
+        setSuccessMessage(`Skill "${skillName}" deleted successfully!`);
+        setTimeout(() => setSuccessMessage(""), 3000);
       }
-    } else {
-      alert(`"${skill}" is not a valid skill. Please select from the suggestions.`);
+    } catch (err) {
+      console.error('Error deleting skill:', err);
+      setError(err.response?.data?.message || "Failed to delete skill");
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setSkillsLoading(false);
     }
-  }
-  
-  // Clear form errors if any
-  if (formErrors.keySkills) {
-    setFormErrors(prev => ({ ...prev, keySkills: null }));
-  }
-  
-  // Clear input and close suggestions
-  setSkillInput("");
-  setShowAddSkillSuggestions(false);
-  setSelectedAddSkillSuggestionIndex(0);
-};
+  };
 
-// Handle deleting skill
-const handleDeleteSkill = async (skillName, e) => {
-  e.stopPropagation(); // Prevent skill selection when clicking delete
-  
-  if (!window.confirm(`Are you sure you want to delete the skill "${skillName}"?`)) {
-    return;
-  }
-
-  try {
-    setSkillsLoading(true);
-    const response = await axios.delete(`http://localhost:5000/api/skills/${encodeURIComponent(skillName)}`);
-
-    if (response.data.success) {
-      // Refresh skills data
-      await fetchSkillsData();
-      setSuccessMessage(`Skill "${skillName}" deleted successfully!`);
-      setTimeout(() => setSuccessMessage(""), 3000);
-    }
-  } catch (err) {
-    console.error('Error deleting skill:', err);
-    setError(err.response?.data?.message || "Failed to delete skill");
-    setTimeout(() => setError(null), 3000);
-  } finally {
-    setSkillsLoading(false);
-  }
-};
-
-// State for new skill input
-const [newSkillName, setNewSkillName] = useState("");
-const [showAddSkillInput, setShowAddSkillInput] = useState(false);
+  // State for new skill input
+  const [newSkillName, setNewSkillName] = useState("");
+  const [showAddSkillInput, setShowAddSkillInput] = useState(false);
 
   // Handle removing a skill (for add profile form)
   const handleRemoveSkill = (skillToRemove) => {
@@ -1308,75 +1197,61 @@ const [showAddSkillInput, setShowAddSkillInput] = useState(false);
   };
 
   // Handle adding new profile
-const handleAddProfile = async () => {
-  const errors = await validateForm();
-  if (Object.keys(errors).length > 0) {
-    setFormErrors(errors);
-    return;
-  }
+  const handleAddProfile = async () => {
+    const errors = await validateForm();
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
 
->>>>>>> main
-  try {
-    setSubmitLoading(true);
-    setFormErrors({});
-    
-    // Create FormData for file upload
-    const formData = new FormData();
-    formData.append('name', newProfile.name);
-    formData.append('email', newProfile.email);
-    formData.append('mobile', newProfile.mobile);
-    formData.append('experience', newProfile.experience || '');
-    formData.append('currentOrg', newProfile.currentOrg || '');
-    formData.append('currentCTC', newProfile.currentCTC || '');
-    formData.append('expectedCTC', newProfile.expectedCTC || '');
-    formData.append('noticePeriod', newProfile.noticePeriod || '');
-    formData.append('profileSourcedBy', newProfile.profileSourcedBy || '');
-    formData.append('clientName', newProfile.clientName || '');
-    
-    // Format the date if it exists
-    if (profileSubmissionDate) {
-      // Format as DD-MMM-YY (e.g., 15-Mar-25)
-      const day = profileSubmissionDate.getDate().toString().padStart(2, '0');
-      const month = profileSubmissionDate.toLocaleString('default', { month: 'short' });
-      const year = profileSubmissionDate.getFullYear().toString().slice(-2);
-      const formattedDate = `${day}-${month}-${year}`;
-      formData.append('profileSubmissionDate', formattedDate);
-    } else {
-      // If no date selected, use current date
-      const today = new Date();
-      const day = today.getDate().toString().padStart(2, '0');
-      const month = today.toLocaleString('default', { month: 'short' });
-      const year = today.getFullYear().toString().slice(-2);
-      const formattedDate = `${day}-${month}-${year}`;
-      formData.append('profileSubmissionDate', formattedDate);
-    }
-    
-    formData.append('keySkills', JSON.stringify(newProfile.keySkills));
-    formData.append('visaType', newProfile.visaType || 'NA');
-    
-    if (newProfile.resumePdf) {
-      formData.append('resume', newProfile.resumePdf);
-    }
-    
-    const response = await axios.post('http://localhost:5000/api/candidates', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-=======
     try {
       setSubmitLoading(true);
       setFormErrors({});
       
-      const response = await axios.post('https://recruitment-hiring-portal.vercel.app/api/candidates', newProfile);
+      const formData = new FormData();
+      formData.append('name', newProfile.name);
+      formData.append('email', newProfile.email);
+      formData.append('mobile', newProfile.mobile);
+      formData.append('experience', newProfile.experience || '');
+      formData.append('currentOrg', newProfile.currentOrg || '');
+      formData.append('currentCTC', newProfile.currentCTC || '');
+      formData.append('expectedCTC', newProfile.expectedCTC || '');
+      formData.append('noticePeriod', newProfile.noticePeriod || '');
+      formData.append('profileSourcedBy', newProfile.profileSourcedBy || '');
+      formData.append('clientName', newProfile.clientName || '');
+      
+      if (profileSubmissionDate) {
+        const day = profileSubmissionDate.getDate().toString().padStart(2, '0');
+        const month = profileSubmissionDate.toLocaleString('default', { month: 'short' });
+        const year = profileSubmissionDate.getFullYear().toString().slice(-2);
+        const formattedDate = `${day}-${month}-${year}`;
+        formData.append('profileSubmissionDate', formattedDate);
+      } else {
+        const today = new Date();
+        const day = today.getDate().toString().padStart(2, '0');
+        const month = today.toLocaleString('default', { month: 'short' });
+        const year = today.getFullYear().toString().slice(-2);
+        const formattedDate = `${day}-${month}-${year}`;
+        formData.append('profileSubmissionDate', formattedDate);
+      }
+      
+      formData.append('keySkills', JSON.stringify(newProfile.keySkills));
+      formData.append('visaType', newProfile.visaType || 'NA');
+      
+      if (newProfile.resumePdf) {
+        formData.append('resume', newProfile.resumePdf);
+      }
+      
+      const response = await axios.post('http://localhost:5000/api/candidates', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
       
       if (response.data.success) {
         setSuccessMessage("Profile added successfully!");
         
         await fetchAllCandidates();
-        await fetchSkillsData();
-        
-        if (selectedSkill !== "All") {
-          await filterCandidatesBySkill(selectedSkill);
-        }
         
         setTimeout(() => {
           setShowAddProfile(false);
@@ -1385,64 +1260,32 @@ const handleAddProfile = async () => {
             name: "",
             email: "",
             mobile: "",
-            location: "",
-            visaStatus: "",
-            passport: "",
             experience: "",
-            currentRole: "",
-            skills: [],
-            status: "Available",
+            currentOrg: "",
+            currentCTC: "",
+            expectedCTC: "",
             noticePeriod: "",
-            salary: "",
-            education: "",
-            bio: ""
+            profileSourcedBy: "",
+            clientName: "",
+            profileSubmissionDate: "",
+            keySkills: [],
+            visaType: "NA",
+            resumePdf: null
           });
+          setProfileSubmissionDate(null);
           setSkillInput("");
+          setPdfFile(null);
         }, 1000);
->>>>>>> 2e9297ab124dd1a1ef480673d9a4773975fb2fcb
       }
-    });
-    
-    if (response.data.success) {
-      setSuccessMessage("Profile added successfully!");
-      
-      // Refresh data
-      await fetchAllCandidates();
-      
-      // Close modal after successful save
-      setTimeout(() => {
-        setShowAddProfile(false);
-        setSuccessMessage("");
-        setNewProfile({
-          name: "",
-          email: "",
-          mobile: "",
-          experience: "",
-          currentOrg: "",
-          currentCTC: "",
-          expectedCTC: "",
-          noticePeriod: "",
-          profileSourcedBy: "",
-          clientName: "",
-          profileSubmissionDate: "",
-          keySkills: [],
-          visaType: "NA",
-          resumePdf: null
-        });
-        setProfileSubmissionDate(null); // Reset date picker
-        setSkillInput("");
-        setPdfFile(null);
-      }, 1000);
+    } catch (err) {
+      console.error('Error adding profile:', err);
+      setFormErrors({
+        submit: err.response?.data?.message || "Failed to add profile. Please try again."
+      });
+    } finally {
+      setSubmitLoading(false);
     }
-  } catch (err) {
-    console.error('Error adding profile:', err);
-    setFormErrors({
-      submit: err.response?.data?.message || "Failed to add profile. Please try again."
-    });
-  } finally {
-    setSubmitLoading(false);
-  }
-};
+  };
 
   // Handle input change
   const handleInputChange = (e) => {
@@ -1459,7 +1302,6 @@ const handleAddProfile = async () => {
     setPrimarySkillInput(value);
     setSelectedPrimarySuggestionIndex(0);
     
-    // Get the last part after comma for suggestions
     const lastPart = value.split(',').pop().trim();
     
     if (lastPart) {
@@ -1480,7 +1322,6 @@ const handleAddProfile = async () => {
     setSecondarySkillInput(value);
     setSelectedSecondarySuggestionIndex(0);
     
-    // Get the last part after comma for suggestions
     const lastPart = value.split(',').pop().trim();
     
     if (lastPart) {
@@ -1508,11 +1349,9 @@ const handleAddProfile = async () => {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (filteredPrimarySuggestions.length > 0 && selectedPrimarySuggestionIndex >= 0) {
-        // Select the highlighted suggestion
         const indexToUse = selectedPrimarySuggestionIndex >= 0 ? selectedPrimarySuggestionIndex : 0;
         selectPrimarySkill(filteredPrimarySuggestions[indexToUse]);
       } else if (primarySkillInput.trim()) {
-        // Handle comma-separated input
         if (primarySkillInput.includes(',')) {
           const skills = primarySkillInput.split(',').map(s => s.trim()).filter(s => s);
           setSearchFilters(prev => ({
@@ -1545,11 +1384,9 @@ const handleAddProfile = async () => {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (filteredSecondarySuggestions.length > 0 && selectedSecondarySuggestionIndex >= 0) {
-        // Select the highlighted suggestion
         const indexToUse = selectedSecondarySuggestionIndex >= 0 ? selectedSecondarySuggestionIndex : 0;
         selectSecondarySkill(filteredSecondarySuggestions[indexToUse]);
       } else if (secondarySkillInput.trim()) {
-        // Handle comma-separated input
         if (secondarySkillInput.includes(',')) {
           const skills = secondarySkillInput.split(',').map(s => s.trim()).filter(s => s);
           setSearchFilters(prev => ({
@@ -1571,7 +1408,6 @@ const handleAddProfile = async () => {
 
   // Handle primary skill selection from suggestions
   const selectPrimarySkill = (skill) => {
-    // Get the current input and replace the last part with the selected skill
     const parts = primarySkillInput.split(',');
     if (parts.length > 1) {
       parts[parts.length - 1] = skill;
@@ -1580,7 +1416,6 @@ const handleAddProfile = async () => {
       setPrimarySkillInput(skill);
     }
     
-    // Update search filters immediately when skill is selected
     setSearchFilters(prev => ({
       ...prev,
       primarySkills: [...new Set([...prev.primarySkills, skill])]
@@ -1592,7 +1427,6 @@ const handleAddProfile = async () => {
 
   // Handle secondary skill selection from suggestions
   const selectSecondarySkill = (skill) => {
-    // Get the current input and replace the last part with the selected skill
     const parts = secondarySkillInput.split(',');
     if (parts.length > 1) {
       parts[parts.length - 1] = skill;
@@ -1601,7 +1435,6 @@ const handleAddProfile = async () => {
       setSecondarySkillInput(skill);
     }
     
-    // Update search filters immediately when skill is selected
     setSearchFilters(prev => ({
       ...prev,
       secondarySkills: [...new Set([...prev.secondarySkills, skill])]
@@ -1622,174 +1455,143 @@ const handleAddProfile = async () => {
     setSearchFilters(prev => ({ ...prev, [name]: value }));
   };
 
-// Apply search filters - UPDATED TO HANDLE SKILL REMOVAL CORRECTLY
-const applySearchFilters = async () => {
-  try {
-    setFilterLoading(true);
-    setError(null);
-    
-    // Get the current filter values from state as a base
-    let updatedFilters = { ...searchFilters };
-    
-    // Process primary skills from input
-    if (primarySkillInput.trim()) {
-      // If there's input, parse it into skills
-      let newPrimarySkills = [];
-      if (primarySkillInput.includes(',')) {
-        newPrimarySkills = primarySkillInput.split(',').map(s => s.trim()).filter(s => s);
-      } else {
-        newPrimarySkills = [primarySkillInput.trim()];
-      }
-      updatedFilters.primarySkills = [...new Set(newPrimarySkills)];
-    } else {
-      // If input is empty, clear primary skills
-      updatedFilters.primarySkills = [];
-    }
-    
-    // Process secondary skills from input
-    if (secondarySkillInput.trim()) {
-      // If there's input, parse it into skills
-      let newSecondarySkills = [];
-      if (secondarySkillInput.includes(',')) {
-        newSecondarySkills = secondarySkillInput.split(',').map(s => s.trim()).filter(s => s);
-      } else {
-        newSecondarySkills = [secondarySkillInput.trim()];
-      }
-      updatedFilters.secondarySkills = [...new Set(newSecondarySkills)];
-    } else {
-      // If input is empty, clear secondary skills
-      updatedFilters.secondarySkills = [];
-    }
-    
-    console.log("Applying search with updated filters:", updatedFilters);
-    
-    // Build query parameters for GET request
-    const params = new URLSearchParams();
-    
-    // Add primary skills (comma-separated)
-    if (updatedFilters.primarySkills.length > 0) {
-      params.append('primarySkills', updatedFilters.primarySkills.join(','));
-    }
-    
-    // Add secondary skills (comma-separated)
-    if (updatedFilters.secondarySkills.length > 0) {
-      params.append('secondarySkills', updatedFilters.secondarySkills.join(','));
-    }
-    
-    // Add experience range
-    if (updatedFilters.experienceMin) {
-      params.append('minExperience', updatedFilters.experienceMin);
-    }
-    
-    if (updatedFilters.experienceMax) {
-      params.append('maxExperience', updatedFilters.experienceMax);
-    }
-    
-    console.log("Query params:", params.toString());
-    
-    // Use the correct endpoint
-    const response = await axios.get(`http://localhost:5000/api/shortcandidates/filter?${params.toString()}`);
-    
-    if (response.data.success) {
-      // Process each candidate
-      const processedCandidates = response.data.data
-        .map(processCandidate)
-        .filter(c => c !== null);
-      
-      console.log(`Smart search found ${processedCandidates.length} candidates`);
-      
-      // Display the filtered candidates
-      setDisplayedCandidates(processedCandidates);
-      
-      // Update the searchFilters state with the new values
-      setSearchFilters(updatedFilters);
-      
-      // Reset to first page
-      setCurrentPage(1);
-      
-      // Close the popup
-      setShowSearchPopup(false);
-      
-      // Reset selected skill to "All" since we're using custom filters
-      setSelectedSkill("All");
-      
-      // Clear search term
-      setSearchTerm("");
-    } else {
-      setError("Failed to filter candidates: " + (response.data.message || "Unknown error"));
-    }
-  } catch (err) {
-    console.error('Error applying filters:', err);
-    
-    // More detailed error logging
-    if (err.response) {
-      console.error('Response status:', err.response.status);
-      console.error('Response data:', err.response.data);
-      setError(`Server error: ${err.response.status} - ${err.response.data?.message || err.message}`);
-    } else if (err.request) {
-      console.error('No response received:', err.request);
-      setError("No response from server. Please check if backend is running.");
-    } else {
-      console.error('Error setting up request:', err.message);
-      setError(err.message);
-    }
-    
-    // Fallback to local filtering only if the API fails completely
+  // Apply search filters
+  const applySearchFilters = async () => {
     try {
-      console.log("Falling back to local filtering...");
+      setFilterLoading(true);
+      setError(null);
       
-      // Start with all candidates
-      let filtered = [...candidates];
+      let updatedFilters = { ...searchFilters };
       
-      // Apply skill filter if skills are selected
-      const allSkills = [...updatedFilters.primarySkills, ...updatedFilters.secondarySkills].filter(s => s);
-      
-      if (allSkills.length > 0) {
-        filtered = filtered.filter(candidate => {
-          return candidate.keySkills && Array.isArray(candidate.keySkills) && 
-            candidate.keySkills.some(skill => 
-              allSkills.some(s => s.toLowerCase() === (skill && skill.toLowerCase()))
-            );
-        });
+      if (primarySkillInput.trim()) {
+        let newPrimarySkills = [];
+        if (primarySkillInput.includes(',')) {
+          newPrimarySkills = primarySkillInput.split(',').map(s => s.trim()).filter(s => s);
+        } else {
+          newPrimarySkills = [primarySkillInput.trim()];
+        }
+        updatedFilters.primarySkills = [...new Set(newPrimarySkills)];
+      } else {
+        updatedFilters.primarySkills = [];
       }
       
-      // Apply experience filter
-      if (updatedFilters.experienceMin || updatedFilters.experienceMax) {
-        const minExp = updatedFilters.experienceMin ? parseFloat(updatedFilters.experienceMin) : 0;
-        const maxExp = updatedFilters.experienceMax ? parseFloat(updatedFilters.experienceMax) : Infinity;
+      if (secondarySkillInput.trim()) {
+        let newSecondarySkills = [];
+        if (secondarySkillInput.includes(',')) {
+          newSecondarySkills = secondarySkillInput.split(',').map(s => s.trim()).filter(s => s);
+        } else {
+          newSecondarySkills = [secondarySkillInput.trim()];
+        }
+        updatedFilters.secondarySkills = [...new Set(newSecondarySkills)];
+      } else {
+        updatedFilters.secondarySkills = [];
+      }
+      
+      console.log("Applying search with updated filters:", updatedFilters);
+      
+      const params = new URLSearchParams();
+      
+      if (updatedFilters.primarySkills.length > 0) {
+        params.append('primarySkills', updatedFilters.primarySkills.join(','));
+      }
+      
+      if (updatedFilters.secondarySkills.length > 0) {
+        params.append('secondarySkills', updatedFilters.secondarySkills.join(','));
+      }
+      
+      if (updatedFilters.experienceMin) {
+        params.append('minExperience', updatedFilters.experienceMin);
+      }
+      
+      if (updatedFilters.experienceMax) {
+        params.append('maxExperience', updatedFilters.experienceMax);
+      }
+      
+      console.log("Query params:", params.toString());
+      
+      const response = await axios.get(`http://localhost:5000/api/shortcandidates/filter?${params.toString()}`);
+      
+      if (response.data.success) {
+        const processedCandidates = response.data.data
+          .map(processCandidate)
+          .filter(c => c !== null);
         
-        filtered = filtered.filter(candidate => {
-          const expNum = parseFloat(candidate.experience) || 0;
-          
-          if (updatedFilters.experienceMin && expNum < minExp) return false;
-          if (updatedFilters.experienceMax && expNum > maxExp) return false;
-          return true;
-        });
+        console.log(`Smart search found ${processedCandidates.length} candidates`);
+        
+        setDisplayedCandidates(processedCandidates);
+        setSearchFilters(updatedFilters);
+        setCurrentPage(1);
+        setShowSearchPopup(false);
+        setSelectedSkill("All");
+        setSearchTerm("");
+      } else {
+        setError("Failed to filter candidates: " + (response.data.message || "Unknown error"));
+      }
+    } catch (err) {
+      console.error('Error applying filters:', err);
+      
+      if (err.response) {
+        console.error('Response status:', err.response.status);
+        console.error('Response data:', err.response.data);
+        setError(`Server error: ${err.response.status} - ${err.response.data?.message || err.message}`);
+      } else if (err.request) {
+        console.error('No response received:', err.request);
+        setError("No response from server. Please check if backend is running.");
+      } else {
+        console.error('Error setting up request:', err.message);
+        setError(err.message);
       }
       
-      // Sort by ID in DESCENDING order
-      filtered.sort((a, b) => {
-        const idA = a.id || 0;
-        const idB = b.id || 0;
-        return idB - idA;
-      });
-      
-      console.log(`Fallback filter found ${filtered.length} candidates`);
-      setDisplayedCandidates(filtered);
-      
-      setSearchFilters(updatedFilters);
-      setCurrentPage(1);
-      setShowSearchPopup(false);
-      setSelectedSkill("All");
-      setSearchTerm("");
-    } catch (fallbackErr) {
-      console.error('Fallback filtering also failed:', fallbackErr);
-      // Keep error message from main error
+      try {
+        console.log("Falling back to local filtering...");
+        
+        let filtered = [...candidates];
+        
+        const allSkills = [...updatedFilters.primarySkills, ...updatedFilters.secondarySkills].filter(s => s);
+        
+        if (allSkills.length > 0) {
+          filtered = filtered.filter(candidate => {
+            return candidate.keySkills && Array.isArray(candidate.keySkills) && 
+              candidate.keySkills.some(skill => 
+                allSkills.some(s => s.toLowerCase() === (skill && skill.toLowerCase()))
+              );
+          });
+        }
+        
+        if (updatedFilters.experienceMin || updatedFilters.experienceMax) {
+          const minExp = updatedFilters.experienceMin ? parseFloat(updatedFilters.experienceMin) : 0;
+          const maxExp = updatedFilters.experienceMax ? parseFloat(updatedFilters.experienceMax) : Infinity;
+          
+          filtered = filtered.filter(candidate => {
+            const expNum = parseFloat(candidate.experience) || 0;
+            
+            if (updatedFilters.experienceMin && expNum < minExp) return false;
+            if (updatedFilters.experienceMax && expNum > maxExp) return false;
+            return true;
+          });
+        }
+        
+        filtered.sort((a, b) => {
+          const idA = a.id || 0;
+          const idB = b.id || 0;
+          return idB - idA;
+        });
+        
+        console.log(`Fallback filter found ${filtered.length} candidates`);
+        setDisplayedCandidates(filtered);
+        
+        setSearchFilters(updatedFilters);
+        setCurrentPage(1);
+        setShowSearchPopup(false);
+        setSelectedSkill("All");
+        setSearchTerm("");
+      } catch (fallbackErr) {
+        console.error('Fallback filtering also failed:', fallbackErr);
+      }
+    } finally {
+      setFilterLoading(false);
     }
-  } finally {
-    setFilterLoading(false);
-  }
-};
+  };
 
   // Reset search filters
   const resetSearchFilters = () => {
@@ -1810,7 +1612,6 @@ const applySearchFilters = async () => {
 
   // Edit search filters - open popup with current filters
   const editSearchFilters = () => {
-    // Set the input values from current filters
     setPrimarySkillInput(searchFilters.primarySkills.join(', '));
     setSecondarySkillInput(searchFilters.secondarySkills.join(', '));
     setShowSearchPopup(true);
@@ -1999,170 +1800,170 @@ const applySearchFilters = async () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* LEFT SIDEBAR - SKILLS WIDGET */}
-<div className="lg:col-span-1">
-  <div className="bg-white rounded-2xl shadow-xl p-4 sticky top-6">
-    <div className="flex items-center justify-between mb-4">
-      <h3 className="text-lg font-semibold">Skills Filter</h3>
-      <Filter size={18} className="text-gray-500" />
-    </div>
-    
-    {skillsLoading ? (
-      <div className="flex justify-center py-8">
-        <Loader className="w-6 h-6 animate-spin text-blue-600" />
-      </div>
-    ) : (
-      <div className="space-y-2 mb-4 max-h-[400px] overflow-y-auto">
-        <button
-          onClick={() => handleSkillSelect("All")}
-          className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex justify-between items-center ${
-            selectedSkill === "All" 
-              ? "bg-blue-100 text-blue-700 border border-blue-300" 
-              : "hover:bg-gray-100"
-          }`}
-        >
-          <span className="font-medium">All Skills</span>
-          <span className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full">
-            {totalSkills}
-          </span>
-        </button>
-        
-        {skills.length > 0 ? (
-          <>
-            {/* Skills List */}
-            {skills.map((skill) => {
-              const count = skillCounts[skill.name] || 0;
-              return (
-                <div key={skill.name} className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleSkillSelect(skill.name)}
-                    disabled={filterLoading}
-                    className={`flex-1 text-left px-3 py-2 rounded-lg transition-colors flex justify-between items-center ${
-                      selectedSkill === skill.name
-                        ? "bg-blue-100 text-blue-700 border border-blue-300"
-                        : "hover:bg-gray-100"
-                    } ${filterLoading ? 'opacity-50 cursor-wait' : ''}`}
-                  >
-                    <span className="truncate">{skill.name}</span>
-                    <span className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full ml-2 flex-shrink-0">
-                      {count}
-                    </span>
-                  </button>
-                  
-                  {/* Delete button - only show for admin users */}
-                  {userRole && userRole.toLowerCase() === "admin" && (
-                    <button
-                      onClick={(e) => handleDeleteSkill(skill.name, e)}
-                      className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete skill"
-                      disabled={skillsLoading}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )} 
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-2xl shadow-xl p-4 sticky top-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Skills Filter</h3>
+                  <Filter size={18} className="text-gray-500" />
                 </div>
-              );
-            })}
-            
-            {/* Add Skill Section - only show for admin users */}
-            {userRole && userRole.toLowerCase() === "admin" && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                {showAddSkillInput ? (
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={newSkillName}
-                      onChange={(e) => setNewSkillName(e.target.value)}
-                      placeholder="Enter new skill name"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      autoFocus
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          handleAddSkill(newSkillName);
-                          setNewSkillName("");
-                          setShowAddSkillInput(false);
-                        }}
-                        disabled={!newSkillName.trim() || skillsLoading}
-                        className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-1"
-                      >
-                        <Save size={16} />
-                        Save
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowAddSkillInput(false);
-                          setNewSkillName("");
-                        }}
-                        className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                      >
-                        Cancel
-                      </button>
-                    </div>
+                
+                {skillsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader className="w-6 h-6 animate-spin text-blue-600" />
                   </div>
                 ) : (
-                  <button
-                    onClick={() => setShowAddSkillInput(true)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                  >
-                    <Plus size={16} />
-                    Add New Skill
-                  </button>
+                  <div className="space-y-2 mb-4 max-h-[400px] overflow-y-auto">
+                    <button
+                      onClick={() => handleSkillSelect("All")}
+                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors flex justify-between items-center ${
+                        selectedSkill === "All" 
+                          ? "bg-blue-100 text-blue-700 border border-blue-300" 
+                          : "hover:bg-gray-100"
+                      }`}
+                    >
+                      <span className="font-medium">All Skills</span>
+                      <span className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full">
+                        {totalSkills}
+                      </span>
+                    </button>
+                    
+                    {skills.length > 0 ? (
+                      <>
+                        {/* Skills List */}
+                        {skills.map((skill) => {
+                          const count = skillCounts[skill.name] || 0;
+                          return (
+                            <div key={skill.name} className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleSkillSelect(skill.name)}
+                                disabled={filterLoading}
+                                className={`flex-1 text-left px-3 py-2 rounded-lg transition-colors flex justify-between items-center ${
+                                  selectedSkill === skill.name
+                                    ? "bg-blue-100 text-blue-700 border border-blue-300"
+                                    : "hover:bg-gray-100"
+                                } ${filterLoading ? 'opacity-50 cursor-wait' : ''}`}
+                              >
+                                <span className="truncate">{skill.name}</span>
+                                <span className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full ml-2 flex-shrink-0">
+                                  {count}
+                                </span>
+                              </button>
+                              
+                              {/* Delete button - only show for admin users */}
+                              {userRole && userRole.toLowerCase() === "admin" && (
+                                <button
+                                  onClick={(e) => handleDeleteSkill(skill.name, e)}
+                                  className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete skill"
+                                  disabled={skillsLoading}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )} 
+                            </div>
+                          );
+                        })}
+                        
+                        {/* Add Skill Section - only show for admin users */}
+                        {userRole && userRole.toLowerCase() === "admin" && (
+                          <div className="mt-4 pt-4 border-t border-gray-200">
+                            {showAddSkillInput ? (
+                              <div className="space-y-2">
+                                <input
+                                  type="text"
+                                  value={newSkillName}
+                                  onChange={(e) => setNewSkillName(e.target.value)}
+                                  placeholder="Enter new skill name"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  autoFocus
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      handleAddSkill(newSkillName);
+                                      setNewSkillName("");
+                                      setShowAddSkillInput(false);
+                                    }}
+                                    disabled={!newSkillName.trim() || skillsLoading}
+                                    className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-1"
+                                  >
+                                    <Save size={16} />
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setShowAddSkillInput(false);
+                                      setNewSkillName("");
+                                    }}
+                                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setShowAddSkillInput(true)}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                              >
+                                <Plus size={16} />
+                                Add New Skill
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-gray-500 text-center py-4">No skills found</p>
+                    )} 
+                  </div>
+                )}
+
+                {/* Selected Candidates Panel */}
+                <div className="mt-6 pt-4 border-t">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold">Selected Candidates</h4>
+                    <Users size={16} className="text-gray-500" />
+                  </div>
+                  {selectedCandidates.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No candidates selected</p>
+                  ) : (
+                    <>
+                      <div className="space-y-2 max-h-40 overflow-y-auto mb-3">
+                        {selectedCandidates.map(candidate => (
+                          <div key={`selected-${candidate.id}`} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{candidate.name}</p>
+                              <p className="text-xs text-gray-500 truncate">{candidate.currentOrg}</p>
+                            </div>
+                            <button
+                              onClick={(e) => handleRemoveCandidate(candidate.id, e)}
+                              className="text-red-500 hover:text-red-700 ml-2 flex-shrink-0"
+                            >
+                              <XCircle size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={toggleSelectedView}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                      >
+                        <Eye size={16} />
+                        View Selected ({selectedCandidates.length})
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Loading indicator for filter */}
+                {filterLoading && (
+                  <div className="absolute inset-0 bg-white/50 rounded-2xl flex items-center justify-center">
+                    <Loader className="w-8 h-8 animate-spin text-blue-600" />
+                  </div>
                 )}
               </div>
-            )}
-          </>
-        ) : (
-          <p className="text-gray-500 text-center py-4">No skills found</p>
-        )} 
-      </div>
-    )}
-
-    {/* Selected Candidates Panel - Keep this one in the sidebar */}
-    <div className="mt-6 pt-4 border-t">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="font-semibold">Selected Candidates</h4>
-        <Users size={16} className="text-gray-500" />
-      </div>
-      {selectedCandidates.length === 0 ? (
-        <p className="text-gray-500 text-sm">No candidates selected</p>
-      ) : (
-        <>
-          <div className="space-y-2 max-h-40 overflow-y-auto mb-3">
-            {selectedCandidates.map(candidate => (
-              <div key={`selected-${candidate.id}`} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{candidate.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{candidate.currentOrg}</p>
-                </div>
-                <button
-                  onClick={(e) => handleRemoveCandidate(candidate.id, e)}
-                  className="text-red-500 hover:text-red-700 ml-2 flex-shrink-0"
-                >
-                  <XCircle size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={toggleSelectedView}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
-            <Eye size={16} />
-            View Selected ({selectedCandidates.length})
-          </button>
-        </>
-      )}
-    </div>
-
-    {/* Loading indicator for filter */}
-    {filterLoading && (
-      <div className="absolute inset-0 bg-white/50 rounded-2xl flex items-center justify-center">
-        <Loader className="w-8 h-8 animate-spin text-blue-600" />
-      </div>
-    )}
-  </div>
-</div>
+            </div>
 
             {/* MAIN CONTENT - CANDIDATES */}
             <div className="lg:col-span-3">
@@ -2297,256 +2098,279 @@ const applySearchFilters = async () => {
                                   WhatsApp
                                 </button>
                                 <button
-  onClick={(e) => handleViewResume(candidate, e)}
-  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1 ${
-    candidate.resumePath || candidate.googleDriveViewLink
-      ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
-      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-  }`}
-  title={candidate.resumePath || candidate.googleDriveViewLink ? "View Resume" : "No Resume Available"}
-  disabled={!candidate.resumePath && !candidate.googleDriveViewLink}
->
-  <FileText size={14} />
-  Resume
-</button>
+                                  onClick={(e) => handleViewResume(candidate, e)}
+                                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1 ${
+                                    candidate.resumePath || candidate.googleDriveViewLink
+                                      ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
+                                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                  }`}
+                                  title={candidate.resumePath || candidate.googleDriveViewLink ? "View Resume" : "No Resume Available"}
+                                  disabled={!candidate.resumePath && !candidate.googleDriveViewLink}
+                                >
+                                  <FileText size={14} />
+                                  Resume
+                                </button>
                               </div>
                             </div>
                           );
                         })}
                       </div>
 
+                      {/* Pagination for selected view */}
+                      {selectedTotalPages > 1 && (
+                        <div className="flex items-center justify-between border-t pt-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">Page {selectedViewPage} of {selectedTotalPages}</span>
+                          </div>
+                          <div className="flex gap-2 items-center">
+                            <button
+                              onClick={goToSelectedPreviousPage}
+                              disabled={selectedViewPage === 1}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
+                            >
+                              <ChevronLeft size={18} />
+                              Previous
+                            </button>
+                            <button
+                              onClick={goToSelectedNextPage}
+                              disabled={selectedViewPage === selectedTotalPages}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
+                            >
+                              Next
+                              <ChevronRight size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </>
                   )
                 ) : (
-              // Main Candidates View
-currentItems.length === 0 ? (
-  <div className="text-center py-12">
-    <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-    <h3 className="text-lg font-semibold text-gray-700 mb-2">
-      No candidates found
-    </h3>
-    <p className="text-gray-500">
-      {searchTerm 
-        ? `No results for "${searchTerm}"`
-        : selectedSkill !== "All" 
-          ? `No candidates with skill "${selectedSkill}"`
-          : "No candidates available"}
-    </p>
-    {(searchTerm || selectedSkill !== "All") && (
-      <button
-        onClick={() => {
-          setSearchTerm("");
-          setSelectedSkill("All");
-          setDisplayedCandidates(candidates);
-        }}
-        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-      >
-        Clear Filters
-      </button>
-    )}
-  </div>
-) : (
-  <>
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-      {currentItems.map(candidate => {
-        const skills = parseKeySkills(candidate.keySkills);
-        return (
-          <div 
-            key={`candidate-${candidate.id}`} 
-            className={`border rounded-xl p-4 hover:shadow-lg transition-shadow cursor-pointer ${getVisaBorderColor(candidate.visaType)}`}
-            onClick={(e) => handleViewDetails(candidate, e)}
-          >
-            {/* Candidate Header */}
-            <div className="flex justify-between items-start mb-3">
-              <div className="flex-1 min-w-0">
-                <h4 className="font-bold text-lg truncate hover:text-blue-600">{candidate.name}</h4>
-                <p className="text-gray-600 text-sm truncate">{candidate.currentOrg}</p>
-              </div>
-              
-              {/* Visa Type Badge */}
-              {candidate.visaType && candidate.visaType !== "NA" && (
-                <span className={`ml-2 px-2 py-1 text-xs rounded-full font-medium ${
-                  candidate.visaType === "H1B" ? "bg-blue-100 text-blue-800" :
-                  candidate.visaType === "L1" ? "bg-green-100 text-green-800" :
-                  candidate.visaType === "Green Card" ? "bg-purple-100 text-purple-800" :
-                  candidate.visaType === "Citizen" ? "bg-yellow-100 text-yellow-800" :
-                  "bg-orange-100 text-orange-800"
-                }`}>
-                  {candidate.visaType}
-                </span>
-              )}
-              
-              <div className="flex gap-1 ml-2 flex-shrink-0">
-                <button
-                  onClick={(e) => handleEditClick(candidate, e)}
-                  className="p-1.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
-                  title="Edit Candidate"
-                >
-                  <Edit2 size={16} />
-                </button>
-                <button
-                  onClick={(e) => handleDeleteClick(candidate, e)}
-                  className="p-1.5 rounded bg-red-100 text-red-700 hover:bg-red-200"
-                  title="Delete Candidate"
-                >
-                  <Trash2 size={16} />
-                </button>
-                <button
-                  onClick={(e) => handleSelectCandidate(candidate, e)}
-                  disabled={selectedCandidates.some(c => c.id === candidate.id)}
-                  className={`px-3 py-1 rounded text-sm ${
-                    selectedCandidates.some(c => c.id === candidate.id)
-                      ? "bg-green-100 text-green-800 cursor-default"
-                      : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                  }`}
-                >
-                  {selectedCandidates.some(c => c.id === candidate.id) ? "Selected" : "Select"}
-                </button>
-              </div>
-            </div>
+                  // Main Candidates View
+                  currentItems.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                        No candidates found
+                      </h3>
+                      <p className="text-gray-500">
+                        {searchTerm 
+                          ? `No results for "${searchTerm}"`
+                          : selectedSkill !== "All" 
+                            ? `No candidates with skill "${selectedSkill}"`
+                            : "No candidates available"}
+                      </p>
+                      {(searchTerm || selectedSkill !== "All") && (
+                        <button
+                          onClick={() => {
+                            setSearchTerm("");
+                            setSelectedSkill("All");
+                            setDisplayedCandidates(candidates);
+                          }}
+                          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          Clear Filters
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        {currentItems.map(candidate => {
+                          const skills = parseKeySkills(candidate.keySkills);
+                          return (
+                            <div 
+                              key={`candidate-${candidate.id}`} 
+                              className={`border rounded-xl p-4 hover:shadow-lg transition-shadow cursor-pointer ${getVisaBorderColor(candidate.visaType)}`}
+                              onClick={(e) => handleViewDetails(candidate, e)}
+                            >
+                              {/* Candidate Header */}
+                              <div className="flex justify-between items-start mb-3">
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-bold text-lg truncate hover:text-blue-600">{candidate.name}</h4>
+                                  <p className="text-gray-600 text-sm truncate">{candidate.currentOrg}</p>
+                                </div>
+                                
+                                {/* Visa Type Badge */}
+                                {candidate.visaType && candidate.visaType !== "NA" && (
+                                  <span className={`ml-2 px-2 py-1 text-xs rounded-full font-medium ${
+                                    candidate.visaType === "H1B" ? "bg-blue-100 text-blue-800" :
+                                    candidate.visaType === "L1" ? "bg-green-100 text-green-800" :
+                                    candidate.visaType === "Green Card" ? "bg-purple-100 text-purple-800" :
+                                    candidate.visaType === "Citizen" ? "bg-yellow-100 text-yellow-800" :
+                                    "bg-orange-100 text-orange-800"
+                                  }`}>
+                                    {candidate.visaType}
+                                  </span>
+                                )}
+                                
+                                <div className="flex gap-1 ml-2 flex-shrink-0">
+                                  <button
+                                    onClick={(e) => handleEditClick(candidate, e)}
+                                    className="p-1.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                                    title="Edit Candidate"
+                                  >
+                                    <Edit2 size={16} />
+                                  </button>
+                                  <button
+                                    onClick={(e) => handleDeleteClick(candidate, e)}
+                                    className="p-1.5 rounded bg-red-100 text-red-700 hover:bg-red-200"
+                                    title="Delete Candidate"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                  <button
+                                    onClick={(e) => handleSelectCandidate(candidate, e)}
+                                    disabled={selectedCandidates.some(c => c.id === candidate.id)}
+                                    className={`px-3 py-1 rounded text-sm ${
+                                      selectedCandidates.some(c => c.id === candidate.id)
+                                        ? "bg-green-100 text-green-800 cursor-default"
+                                        : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                                    }`}
+                                  >
+                                    {selectedCandidates.some(c => c.id === candidate.id) ? "Selected" : "Select"}
+                                  </button>
+                                </div>
+                              </div>
 
-            {/* Candidate Info */}
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center gap-2 text-sm">
-                <Phone size={14} className="text-gray-500 flex-shrink-0" />
-                <span>{candidate.mobile}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Briefcase size={14} className="text-gray-500 flex-shrink-0" />
-                <span>Exp: {candidate.experience} years</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Building2 size={14} className="text-gray-500 flex-shrink-0" />
-                <span>Client: {candidate.clientName || "N/A"}</span>
-              </div>
-            </div>
+                              {/* Candidate Info */}
+                              <div className="space-y-2 mb-4">
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Phone size={14} className="text-gray-500 flex-shrink-0" />
+                                  <span>{candidate.mobile}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Briefcase size={14} className="text-gray-500 flex-shrink-0" />
+                                  <span>Exp: {candidate.experience} years</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Building2 size={14} className="text-gray-500 flex-shrink-0" />
+                                  <span>Client: {candidate.clientName || "N/A"}</span>
+                                </div>
+                              </div>
 
-            {/* Skills */}
-            <div className="mb-4">
-              <p className="text-sm font-medium mb-2">Key Skills:</p>
-              <div className="flex flex-wrap gap-1">
-                {skills.slice(0, 3).map(skill => (
-                  <button
-                    key={`${candidate.id}-skill-${skill}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSkillSelect(skill);
-                    }}
-                    className={`px-2 py-1 text-xs rounded transition-colors ${
-                      skill === selectedSkill
-                        ? "bg-green-500 text-white font-bold hover:bg-green-600"
-                        : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                    }`}
-                  >
-                    {skill}
-                    {skill === selectedSkill && " ✓"}
-                  </button>
-                ))}
-                {skills.length > 3 && (
-                  <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700">
-                    +{skills.length - 3} more
-                  </span>
-                )}
-              </div>
-            </div>
+                              {/* Skills */}
+                              <div className="mb-4">
+                                <p className="text-sm font-medium mb-2">Key Skills:</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {skills.slice(0, 3).map(skill => (
+                                    <button
+                                      key={`${candidate.id}-skill-${skill}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSkillSelect(skill);
+                                      }}
+                                      className={`px-2 py-1 text-xs rounded transition-colors ${
+                                        skill === selectedSkill
+                                          ? "bg-green-500 text-white font-bold hover:bg-green-600"
+                                          : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                                      }`}
+                                    >
+                                      {skill}
+                                      {skill === selectedSkill && " ✓"}
+                                    </button>
+                                  ))}
+                                  {skills.length > 3 && (
+                                    <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700">
+                                      +{skills.length - 3} more
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={(e) => handleSendEmail(candidate.email, e)}
-                className="flex-1 px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium flex items-center justify-center gap-1"
-                title="Send Email"
-              >
-                <Mail size={14} />
-                Email
-              </button>
-              <button
-                onClick={(e) => handleSendWhatsApp(candidate.mobile, e)}
-                className="flex-1 px-3 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm font-medium flex items-center justify-center gap-1"
-                title="Send WhatsApp"
-              >
-                <MessageCircle size={14} />
-                WhatsApp
-              </button>
-              <button
-                onClick={(e) => handleViewResume(candidate, e)}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1 ${
-                  candidate.resumePath || candidate.googleDriveViewLink
-                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
-                title={candidate.resumePath || candidate.googleDriveViewLink ? "View Resume" : "No Resume Available"}
-                disabled={!candidate.resumePath && !candidate.googleDriveViewLink}
-              >
-                <FileText size={14} />
-                Resume
-              </button>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+                              {/* Action Buttons */}
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={(e) => handleSendEmail(candidate.email, e)}
+                                  className="flex-1 px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium flex items-center justify-center gap-1"
+                                  title="Send Email"
+                                >
+                                  <Mail size={14} />
+                                  Email
+                                </button>
+                                <button
+                                  onClick={(e) => handleSendWhatsApp(candidate.mobile, e)}
+                                  className="flex-1 px-3 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm font-medium flex items-center justify-center gap-1"
+                                  title="Send WhatsApp"
+                                >
+                                  <MessageCircle size={14} />
+                                  WhatsApp
+                                </button>
+                                <button
+                                  onClick={(e) => handleViewResume(candidate, e)}
+                                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1 ${
+                                    candidate.resumePath || candidate.googleDriveViewLink
+                                      ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
+                                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                  }`}
+                                  title={candidate.resumePath || candidate.googleDriveViewLink ? "View Resume" : "No Resume Available"}
+                                  disabled={!candidate.resumePath && !candidate.googleDriveViewLink}
+                                >
+                                  <FileText size={14} />
+                                  Resume
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
 
-    {/* Pagination */}
-{totalPages > 1 && (
-  <div className="flex items-center justify-between border-t pt-4">
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-gray-500">Page</span>
-      <input
-        key={currentPage} // This forces the input to re-render with new defaultValue when currentPage changes
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        defaultValue={currentPage}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            const page = parseInt(e.target.value);
-            if (page >= 1 && page <= totalPages) {
-              setCurrentPage(page);
-            } else {
-              // If invalid, reset to current page
-              e.target.value = currentPage;
-            }
-          }
-        }}
-        onBlur={(e) => {
-          // Optional: Also navigate when input loses focus
-          const page = parseInt(e.target.value);
-          if (page >= 1 && page <= totalPages && page !== currentPage) {
-            setCurrentPage(page);
-          } else {
-            // Reset to current page if invalid
-            e.target.value = currentPage;
-          }
-        }}
-        className="w-16 px-2 py-1 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
-        placeholder="Page"
-      />
-      <span className="text-sm text-gray-500">of {totalPages}</span>
-    </div>
-    
-    <div className="flex gap-2 items-center">
-      <button
-        onClick={goToPreviousPage}
-        disabled={currentPage === 1}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
-      >
-        <ChevronLeft size={18} />
-        Previous
-      </button>
-      <button
-        onClick={goToNextPage}
-        disabled={currentPage === totalPages}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
-      >
-        Next
-        <ChevronRight size={18} />
-      </button>
-    </div>
-  </div>
-)}
-  </>
-)
+                      {/* Pagination */}
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between border-t pt-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">Page</span>
+                            <input
+                              key={currentPage}
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              defaultValue={currentPage}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  const page = parseInt(e.target.value);
+                                  if (page >= 1 && page <= totalPages) {
+                                    setCurrentPage(page);
+                                  } else {
+                                    e.target.value = currentPage;
+                                  }
+                                }
+                              }}
+                              onBlur={(e) => {
+                                const page = parseInt(e.target.value);
+                                if (page >= 1 && page <= totalPages && page !== currentPage) {
+                                  setCurrentPage(page);
+                                } else {
+                                  e.target.value = currentPage;
+                                }
+                              }}
+                              className="w-16 px-2 py-1 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Page"
+                            />
+                            <span className="text-sm text-gray-500">of {totalPages}</span>
+                          </div>
+                          
+                          <div className="flex gap-2 items-center">
+                            <button
+                              onClick={goToPreviousPage}
+                              disabled={currentPage === 1}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
+                            >
+                              <ChevronLeft size={18} />
+                              Previous
+                            </button>
+                            <button
+                              onClick={goToNextPage}
+                              disabled={currentPage === totalPages}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition"
+                            >
+                              Next
+                              <ChevronRight size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )
                 )}
               </div>
             </div>
@@ -2739,40 +2563,41 @@ currentItems.length === 0 ? (
           </div>
         )}
 
+        {/* RESUME MODAL */}
         {showResumeModal && selectedResumeUrl && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh]">
-      <div className="p-4 flex justify-between items-center border-b">
-        <h3 className="text-xl font-bold">Resume Viewer</h3>
-        <button
-          onClick={() => {
-            setShowResumeModal(false);
-            setSelectedResumeUrl(null);
-          }}
-          className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition"
-        >
-          <X size={24} />
-        </button>
-      </div>
-      <div className="h-[calc(80vh-80px)]">
-        {selectedResumeUrl.includes('drive.google.com') ? (
-          <iframe
-            src={selectedResumeUrl}
-            className="w-full h-full"
-            title="Resume Viewer"
-            allow="autoplay"
-          />
-        ) : (
-          <iframe
-            src={selectedResumeUrl}
-            className="w-full h-full"
-            title="Resume Viewer"
-          />
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh]">
+              <div className="p-4 flex justify-between items-center border-b">
+                <h3 className="text-xl font-bold">Resume Viewer</h3>
+                <button
+                  onClick={() => {
+                    setShowResumeModal(false);
+                    setSelectedResumeUrl(null);
+                  }}
+                  className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="h-[calc(80vh-80px)]">
+                {selectedResumeUrl.includes('drive.google.com') ? (
+                  <iframe
+                    src={selectedResumeUrl}
+                    className="w-full h-full"
+                    title="Resume Viewer"
+                    allow="autoplay"
+                  />
+                ) : (
+                  <iframe
+                    src={selectedResumeUrl}
+                    className="w-full h-full"
+                    title="Resume Viewer"
+                  />
+                )}
+              </div>
+            </div>
+          </div>
         )}
-      </div>
-    </div>
-  </div>
-)}
 
         {/* SEARCH FILTER POPUP */}
         {showSearchPopup && (
@@ -2920,7 +2745,7 @@ currentItems.length === 0 ? (
           </div>
         )}
 
-        {/* ADD PROFILE MODAL - FIXED VERSION WITH SKILLS INSIDE INPUT */}
+        {/* ADD PROFILE MODAL */}
         {showAddProfile && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-8">
@@ -3123,7 +2948,7 @@ currentItems.length === 0 ? (
                     </div>
                   </div>
 
-                          {/* Third Row - Two Columns */}
+                  {/* Third Row - Two Columns */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     {/* Left Column of Third Row */}
                     <div className="space-y-4">
@@ -3174,7 +2999,7 @@ currentItems.length === 0 ? (
                     </div>
                   </div>
 
-                  {/* Key Skills - FIXED VERSION WITH SKILLS INSIDE INPUT */}
+                  {/* Key Skills */}
                   <div className="mt-6 w-full">
                     <label className="block text-sm font-medium mb-2">
                       Key Skills <span className="text-red-500">*</span>
@@ -3211,122 +3036,114 @@ currentItems.length === 0 ? (
                         />
                       </div>
                       
-                     {/* Add Button */}
-<button
-  type="button"
-  onClick={() => {
-    if (skillInput.trim()) {
-      const input = skillInput.trim();
-      
-      // Check if the input contains commas (multiple skills)
-      if (input.includes(',')) {
-        const skills = input.split(',').map(s => s.trim()).filter(s => s);
-        let invalidSkills = [];
-        
-        skills.forEach(s => {
-          const skillExists = skillSuggestions.some(
-            existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
-          );
-          if (!skillExists) {
-            invalidSkills.push(s);
-          }
-        });
-        
-        if (invalidSkills.length > 0) {
-          alert(`The following skills are not in the database: ${invalidSkills.join(', ')}. Only skills from the database can be added.`);
-        } else {
-          // All skills are valid - add them
-          skills.forEach(s => {
-            if (!newProfile.keySkills.includes(s)) {
-              setNewProfile(prev => ({
-                ...prev,
-                keySkills: [...prev.keySkills, s]
-              }));
-            }
-          });
-          
-          // Clear form errors if any
-          if (formErrors.keySkills) {
-            setFormErrors(prev => ({ ...prev, keySkills: null }));
-          }
-          
-          // Clear input and close suggestions
-          setSkillInput("");
-          setShowAddSkillSuggestions(false);
-          setSelectedAddSkillSuggestionIndex(0);
-        }
-      } else {
-        // Single skill - check if it exists
-        const skillExists = skillSuggestions.some(
-          existingSkill => existingSkill.toLowerCase() === input.toLowerCase()
-        );
-        
-        if (skillExists) {
-          if (!newProfile.keySkills.includes(input)) {
-            setNewProfile(prev => ({
-              ...prev,
-              keySkills: [...prev.keySkills, input]
-            }));
-          }
-          
-          // Clear form errors if any
-          if (formErrors.keySkills) {
-            setFormErrors(prev => ({ ...prev, keySkills: null }));
-          }
-          
-          // Clear input and close suggestions
-          setSkillInput("");
-          setShowAddSkillSuggestions(false);
-          setSelectedAddSkillSuggestionIndex(0);
-        } else {
-          // Show error message
-          alert(`"${input}" is not in the skills database. Only skills from the database can be added.`);
-        }
-      }
-    }
-  }}
-  disabled={!skillInput.trim()}
-  className="absolute right-2 top-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
->
-  Add
-</button>
+                      {/* Add Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (skillInput.trim()) {
+                            const input = skillInput.trim();
+                            
+                            if (input.includes(',')) {
+                              const skills = input.split(',').map(s => s.trim()).filter(s => s);
+                              let invalidSkills = [];
+                              
+                              skills.forEach(s => {
+                                const skillExists = skillSuggestions.some(
+                                  existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
+                                );
+                                if (!skillExists) {
+                                  invalidSkills.push(s);
+                                }
+                              });
+                              
+                              if (invalidSkills.length > 0) {
+                                alert(`The following skills are not in the database: ${invalidSkills.join(', ')}. Only skills from the database can be added.`);
+                              } else {
+                                skills.forEach(s => {
+                                  if (!newProfile.keySkills.includes(s)) {
+                                    setNewProfile(prev => ({
+                                      ...prev,
+                                      keySkills: [...prev.keySkills, s]
+                                    }));
+                                  }
+                                });
+                                
+                                if (formErrors.keySkills) {
+                                  setFormErrors(prev => ({ ...prev, keySkills: null }));
+                                }
+                                
+                                setSkillInput("");
+                                setShowAddSkillSuggestions(false);
+                                setSelectedAddSkillSuggestionIndex(0);
+                              }
+                            } else {
+                              const skillExists = skillSuggestions.some(
+                                existingSkill => existingSkill.toLowerCase() === input.toLowerCase()
+                              );
+                              
+                              if (skillExists) {
+                                if (!newProfile.keySkills.includes(input)) {
+                                  setNewProfile(prev => ({
+                                    ...prev,
+                                    keySkills: [...prev.keySkills, input]
+                                  }));
+                                }
+                                
+                                if (formErrors.keySkills) {
+                                  setFormErrors(prev => ({ ...prev, keySkills: null }));
+                                }
+                                
+                                setSkillInput("");
+                                setShowAddSkillSuggestions(false);
+                                setSelectedAddSkillSuggestionIndex(0);
+                              } else {
+                                alert(`"${input}" is not in the skills database. Only skills from the database can be added.`);
+                              }
+                            }
+                          }
+                        }}
+                        disabled={!skillInput.trim()}
+                        className="absolute right-2 top-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                      >
+                        Add
+                      </button>
                       
-{/* Add Skill Suggestions Dropdown */}
-{showAddSkillSuggestions && (
-  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-    {filteredAddSkillSuggestions.length > 0 ? (
-      filteredAddSkillSuggestions.map((skill, index) => (
-        <div
-          key={`add-skill-suggestion-${skill}`}
-          onClick={() => {
-            handleAddSkill(skill);
-          }}
-          className={`px-3 py-2 cursor-pointer text-sm ${
-            index === selectedAddSkillSuggestionIndex 
-              ? 'bg-blue-100 text-blue-700' 
-              : 'hover:bg-blue-50'
-          }`}
-        >
-          {skill}
-        </div>
-      ))
-    ) : (
-      <div className="px-3 py-4 text-center">
-        <p className="text-sm text-red-500 font-medium mb-2">
-          ✗ "{skillInput.split(',').pop().trim()}" is not available
-        </p>
-        <p className="text-xs text-gray-500 bg-yellow-50 p-2 rounded">
-          <span className="font-semibold">Only these skills can be added:</span><br />
-          {skillSuggestions.slice(0, 5).join(', ')}
-          {skillSuggestions.length > 5 && '...'}
-        </p>
-        <p className="text-xs text-gray-400 mt-2">
-          Please select from the existing skills
-        </p>
-      </div>
-    )}
-  </div>
-)}
+                      {/* Add Skill Suggestions Dropdown */}
+                      {showAddSkillSuggestions && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          {filteredAddSkillSuggestions.length > 0 ? (
+                            filteredAddSkillSuggestions.map((skill, index) => (
+                              <div
+                                key={`add-skill-suggestion-${skill}`}
+                                onClick={() => {
+                                  handleAddSkill(skill);
+                                }}
+                                className={`px-3 py-2 cursor-pointer text-sm ${
+                                  index === selectedAddSkillSuggestionIndex 
+                                    ? 'bg-blue-100 text-blue-700' 
+                                    : 'hover:bg-blue-50'
+                                }`}
+                              >
+                                {skill}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="px-3 py-4 text-center">
+                              <p className="text-sm text-red-500 font-medium mb-2">
+                                ✗ "{skillInput.split(',').pop().trim()}" is not available
+                              </p>
+                              <p className="text-xs text-gray-500 bg-yellow-50 p-2 rounded">
+                                <span className="font-semibold">Only these skills can be added:</span><br />
+                                {skillSuggestions.slice(0, 5).join(', ')}
+                                {skillSuggestions.length > 5 && '...'}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-2">
+                                Please select from the existing skills
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Skills Error */}
@@ -3342,11 +3159,11 @@ currentItems.length === 0 ? (
                       <label className="flex-1 cursor-pointer">
                         <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 transition">
                           <input
-  type="file"
-  accept=".pdf,application/pdf"
-  onChange={handlePdfUpload}
-  className="hidden"
-/>
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            onChange={handlePdfUpload}
+                            className="hidden"
+                          />
                           <Upload className="mx-auto h-8 w-8 text-gray-400" />
                           <p className="mt-1 text-sm text-gray-500">
                             {pdfFile ? pdfFile.name : "Click to upload PDF"}
@@ -3402,516 +3219,509 @@ currentItems.length === 0 ? (
           </div>
         )}
 
-       {/* EDIT PROFILE MODAL - REBALANCED LAYOUT */}
-{showEditModal && editingCandidate && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-8">
-      <div className="p-6">
-        {/* Modal Header */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h3 className="text-2xl font-bold">Edit Candidate Profile</h3>
-            <p className="text-gray-500 text-sm">Update the candidate's information</p>
-          </div>
-          <button
-            onClick={() => {
-              setShowEditModal(false);
-              setEditingCandidate(null);
-              setEditFormData({
-                name: "",
-                email: "",
-                mobile: "",
-                experience: "",
-                currentOrg: "",
-                currentCTC: "",
-                expectedCTC: "",
-                noticePeriod: "",
-                profileSourcedBy: "",
-                clientName: "",
-                profileSubmissionDate: "",
-                keySkills: [],
-                visaType: "NA",
-                resumePdf: null
-              });
-              setEditSkillInput("");
-              setEditPdfFile(null);
-              setEditFormErrors({});
-            }}
-            className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition"
-          >
-            <X size={24} />
-          </button>
-        </div>
+        {/* EDIT PROFILE MODAL */}
+        {showEditModal && editingCandidate && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-8">
+              <div className="p-6">
+                {/* Modal Header */}
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h3 className="text-2xl font-bold">Edit Candidate Profile</h3>
+                    <p className="text-gray-500 text-sm">Update the candidate's information</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingCandidate(null);
+                      setEditFormData({
+                        name: "",
+                        email: "",
+                        mobile: "",
+                        experience: "",
+                        currentOrg: "",
+                        currentCTC: "",
+                        expectedCTC: "",
+                        noticePeriod: "",
+                        profileSourcedBy: "",
+                        clientName: "",
+                        profileSubmissionDate: "",
+                        keySkills: [],
+                        visaType: "NA",
+                        resumePdf: null
+                      });
+                      setEditSkillInput("");
+                      setEditPdfFile(null);
+                      setEditFormErrors({});
+                    }}
+                    className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
 
-        {/* Success Message */}
-        {successMessage && (
-          <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
-            <CheckCircle size={20} className="text-green-500" />
-            {successMessage}
-          </div>
-        )}
-
-        {/* Form Error */}
-        {editFormErrors.submit && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            {editFormErrors.submit}
-          </div>
-        )}
-
-        <form onSubmit={(e) => { e.preventDefault(); handleUpdateProfile(); }}>
-          {/* FIRST ROW - Two Columns */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left Column */}
-            <div className="space-y-4">
-              {/* Client Name */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Client Name</label>
-                <input
-                  type="text"
-                  name="clientName"
-                  value={editFormData.clientName}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Broadcom"
-                />
-              </div>
-
-              {/* Candidate Name */}
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Candidate Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={editFormData.name}
-                  onChange={handleEditInputChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    editFormErrors.name ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="Enter full name"
-                />
-                {editFormErrors.name && (
-                  <p className="text-red-500 text-xs mt-1">{editFormErrors.name}</p>
+                {/* Success Message */}
+                {successMessage && (
+                  <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
+                    <CheckCircle size={20} className="text-green-500" />
+                    {successMessage}
+                  </div>
                 )}
-              </div>
 
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Email <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={editFormData.email}
-                  onChange={handleEditInputChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    editFormErrors.email ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="Enter email address"
-                />
-                {editFormErrors.email && (
-                  <p className="text-red-500 text-xs mt-1">{editFormErrors.email}</p>
+                {/* Form Error */}
+                {editFormErrors.submit && (
+                  <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                    {editFormErrors.submit}
+                  </div>
                 )}
-              </div>
 
-              {/* Mobile Number */}
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Mobile Number <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  name="mobile"
-                  value={editFormData.mobile}
-                  onChange={handleEditInputChange}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    editFormErrors.mobile ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="Enter mobile number"
-                />
-                {editFormErrors.mobile && (
-                  <p className="text-red-500 text-xs mt-1">{editFormErrors.mobile}</p>
-                )}
-              </div>
-            </div>
+                <form onSubmit={(e) => { e.preventDefault(); handleUpdateProfile(); }}>
+                  {/* FIRST ROW - Two Columns */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Left Column */}
+                    <div className="space-y-4">
+                      {/* Client Name */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Client Name</label>
+                        <input
+                          type="text"
+                          name="clientName"
+                          value={editFormData.clientName}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., Broadcom"
+                        />
+                      </div>
 
-            {/* Right Column */}
-            <div className="space-y-4">
-              {/* Current Organization */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Current Organization</label>
-                <input
-                  type="text"
-                  name="currentOrg"
-                  value={editFormData.currentOrg}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Tech Mahindra"
-                />
-              </div>
+                      {/* Candidate Name */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Candidate Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="name"
+                          value={editFormData.name}
+                          onChange={handleEditInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            editFormErrors.name ? 'border-red-500' : 'border-gray-300'
+                          }`}
+                          placeholder="Enter full name"
+                        />
+                        {editFormErrors.name && (
+                          <p className="text-red-500 text-xs mt-1">{editFormErrors.name}</p>
+                        )}
+                      </div>
 
-              {/* Experience */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Experience</label>
-                <input
-                  type="text"
-                  name="experience"
-                  value={editFormData.experience}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., 5 years"
-                />
-              </div>
+                      {/* Email */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Email <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          name="email"
+                          value={editFormData.email}
+                          onChange={handleEditInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            editFormErrors.email ? 'border-red-500' : 'border-gray-300'
+                          }`}
+                          placeholder="Enter email address"
+                        />
+                        {editFormErrors.email && (
+                          <p className="text-red-500 text-xs mt-1">{editFormErrors.email}</p>
+                        )}
+                      </div>
 
-              {/* Current CTC */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Current CTC</label>
-                <input
-                  type="text"
-                  name="currentCTC"
-                  value={editFormData.currentCTC}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., 12LPA"
-                />
-              </div>
+                      {/* Mobile Number */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Mobile Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="tel"
+                          name="mobile"
+                          value={editFormData.mobile}
+                          onChange={handleEditInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            editFormErrors.mobile ? 'border-red-500' : 'border-gray-300'
+                          }`}
+                          placeholder="Enter mobile number"
+                        />
+                        {editFormErrors.mobile && (
+                          <p className="text-red-500 text-xs mt-1">{editFormErrors.mobile}</p>
+                        )}
+                      </div>
+                    </div>
 
-              {/* Expected CTC */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Expected CTC</label>
-                <input
-                  type="text"
-                  name="expectedCTC"
-                  value={editFormData.expectedCTC}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., 18LPA"
-                />
-              </div>
-            </div>
-          </div>
+                    {/* Right Column */}
+                    <div className="space-y-4">
+                      {/* Current Organization */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Current Organization</label>
+                        <input
+                          type="text"
+                          name="currentOrg"
+                          value={editFormData.currentOrg}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., Tech Mahindra"
+                        />
+                      </div>
+
+                      {/* Experience */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Experience</label>
+                        <input
+                          type="text"
+                          name="experience"
+                          value={editFormData.experience}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., 5 years"
+                        />
+                      </div>
+
+                      {/* Current CTC */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Current CTC</label>
+                        <input
+                          type="text"
+                          name="currentCTC"
+                          value={editFormData.currentCTC}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., 12LPA"
+                        />
+                      </div>
+
+                      {/* Expected CTC */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Expected CTC</label>
+                        <input
+                          type="text"
+                          name="expectedCTC"
+                          value={editFormData.expectedCTC}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., 18LPA"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
                   {/* SECOND ROW - Two Columns */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-            {/* Left Column of Second Row */}
-            <div className="space-y-4">
-              {/* Notice Period */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Notice Period</label>
-                <input
-                  type="text"
-                  name="noticePeriod"
-                  value={editFormData.noticePeriod}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., 2 months"
-                />
-              </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    {/* Left Column of Second Row */}
+                    <div className="space-y-4">
+                      {/* Notice Period */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Notice Period</label>
+                        <input
+                          type="text"
+                          name="noticePeriod"
+                          value={editFormData.noticePeriod}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., 2 months"
+                        />
+                      </div>
 
-              {/* Profile Sourced By */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Profile Sourced By</label>
-                <input
-                  type="text"
-                  name="profileSourcedBy"
-                  value={editFormData.profileSourcedBy}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Swathi - Linkedin"
-                />
-              </div>
+                      {/* Profile Sourced By */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Profile Sourced By</label>
+                        <input
+                          type="text"
+                          name="profileSourcedBy"
+                          value={editFormData.profileSourcedBy}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., Swathi - Linkedin"
+                        />
+                      </div>
 
-              {/* Visa Type */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Visa Type</label>
-                <select
-                  name="visaType"
-                  value={editFormData.visaType}
-                  onChange={handleEditInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="NA">NA</option>
-                  <option value="H1B">H1B</option>
-                  <option value="L1">L1</option>
-                  <option value="Green Card">Green Card</option>
-                  <option value="Citizen">Citizen</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-            </div>
+                      {/* Visa Type */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Visa Type</label>
+                        <select
+                          name="visaType"
+                          value={editFormData.visaType}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="NA">NA</option>
+                          <option value="H1B">H1B</option>
+                          <option value="L1">L1</option>
+                          <option value="Green Card">Green Card</option>
+                          <option value="Citizen">Citizen</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    </div>
 
-            {/* Right Column of Second Row */}
-            <div className="space-y-4">
-              {/* Profile Submission Date - with DatePicker */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Profile Submission Date</label>
-                <div className="w-full">
-                  <DatePicker
-                    selected={editProfileSubmissionDate}
-                    onChange={(date) => setEditProfileSubmissionDate(date)}
-                    dateFormat="dd-MMM-yy"
-                    placeholderText="Select date"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    maxDate={new Date()}
-                    showMonthDropdown
-                    showYearDropdown
-                    dropdownMode="select"
-                    wrapperClassName="w-full"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {editProfileSubmissionDate ? `Selected: ${editProfileSubmissionDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}` : 'Keep existing date if not changed'}
-                </p>
-              </div>
-            </div>
-          </div>
+                    {/* Right Column of Second Row */}
+                    <div className="space-y-4">
+                      {/* Profile Submission Date - with DatePicker */}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Profile Submission Date</label>
+                        <div className="w-full">
+                          <DatePicker
+                            selected={editProfileSubmissionDate}
+                            onChange={(date) => setEditProfileSubmissionDate(date)}
+                            dateFormat="dd-MMM-yy"
+                            placeholderText="Select date"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            maxDate={new Date()}
+                            showMonthDropdown
+                            showYearDropdown
+                            dropdownMode="select"
+                            wrapperClassName="w-full"
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {editProfileSubmissionDate ? `Selected: ${editProfileSubmissionDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}` : 'Keep existing date if not changed'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-          {/* Key Skills Section - Full Width */}
-          <div className="mt-6 w-full">
-            <label className="block text-sm font-medium mb-2">
-              Key Skills <span className="text-red-500">*</span>
-            </label>
-            
-            {/* Skill Input with Suggestions and Tags Inside */}
-            <div className="relative w-full">
-              <div className="flex flex-wrap items-center gap-1 p-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 min-h-[42px]">
-                {/* Display selected skills as tags inside the input */}
-                {editFormData.keySkills.map((skill, index) => (
-                  <span
-                    key={`edit-skill-tag-${index}`}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
-                  >
-                    {skill}
+                  {/* Key Skills Section - Full Width */}
+                  <div className="mt-6 w-full">
+                    <label className="block text-sm font-medium mb-2">
+                      Key Skills <span className="text-red-500">*</span>
+                    </label>
+                    
+                    {/* Skill Input with Suggestions and Tags Inside */}
+                    <div className="relative w-full">
+                      <div className="flex flex-wrap items-center gap-1 p-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 min-h-[42px]">
+                        {/* Display selected skills as tags inside the input */}
+                        {editFormData.keySkills.map((skill, index) => (
+                          <span
+                            key={`edit-skill-tag-${index}`}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
+                          >
+                            {skill}
+                            <button
+                              type="button"
+                              onClick={() => handleEditSkillRemove(skill)}
+                              className="hover:text-blue-600 focus:outline-none"
+                            >
+                              <X size={14} />
+                            </button>
+                          </span>
+                        ))}
+                        
+                        {/* Input field for new skills */}
+                        <input
+                          type="text"
+                          value={editSkillInput}
+                          onChange={handleEditSkillInputChange}
+                          onKeyDown={handleEditSkillKeyDown}
+                          placeholder={editFormData.keySkills.length === 0 ? "Enter a skill and press Enter (use comma for multiple)" : ""}
+                          className="flex-1 min-w-[150px] outline-none bg-transparent"
+                        />
+                      </div>
+                      
+                      {/* Add Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editSkillInput.trim()) {
+                            const input = editSkillInput.trim();
+                            
+                            if (input.includes(',')) {
+                              const skills = input.split(',').map(s => s.trim()).filter(s => s);
+                              let invalidSkills = [];
+                              
+                              skills.forEach(s => {
+                                const skillExists = skillSuggestions.some(
+                                  existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
+                                );
+                                if (!skillExists) {
+                                  invalidSkills.push(s);
+                                }
+                              });
+                              
+                              if (invalidSkills.length > 0) {
+                                alert(`The following skills are not in the database: ${invalidSkills.join(', ')}. Only skills from the database can be added.`);
+                              } else {
+                                skills.forEach(s => {
+                                  if (!editFormData.keySkills.includes(s)) {
+                                    setEditFormData(prev => ({
+                                      ...prev,
+                                      keySkills: [...prev.keySkills, s]
+                                    }));
+                                  }
+                                });
+                                
+                                if (editFormErrors.keySkills) {
+                                  setEditFormErrors(prev => ({ ...prev, keySkills: null }));
+                                }
+                                
+                                setEditSkillInput("");
+                                setShowEditSkillSuggestions(false);
+                                setSelectedEditSkillSuggestionIndex(0);
+                              }
+                            } else {
+                              const skillExists = skillSuggestions.some(
+                                existingSkill => existingSkill.toLowerCase() === input.toLowerCase()
+                              );
+                              
+                              if (skillExists) {
+                                if (!editFormData.keySkills.includes(input)) {
+                                  setEditFormData(prev => ({
+                                    ...prev,
+                                    keySkills: [...prev.keySkills, input]
+                                  }));
+                                }
+                                
+                                if (editFormErrors.keySkills) {
+                                  setEditFormErrors(prev => ({ ...prev, keySkills: null }));
+                                }
+                                
+                                setEditSkillInput("");
+                                setShowEditSkillSuggestions(false);
+                                setSelectedEditSkillSuggestionIndex(0);
+                              } else {
+                                alert(`"${input}" is not in the skills database. Only skills from the database can be added.`);
+                              }
+                            }
+                          }
+                        }}
+                        disabled={!editSkillInput.trim()}
+                        className="absolute right-2 top-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                      >
+                        Add
+                      </button>
+                      
+                      {/* Edit Skill Suggestions Dropdown */}
+                      {showEditSkillSuggestions && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          {filteredEditSkillSuggestions.length > 0 ? (
+                            filteredEditSkillSuggestions.map((skill, index) => (
+                              <div
+                                key={`edit-skill-suggestion-${skill}`}
+                                onClick={() => {
+                                  handleEditSkillAdd(skill);
+                                }}
+                                className={`px-3 py-2 cursor-pointer text-sm ${
+                                  index === selectedEditSkillSuggestionIndex 
+                                    ? 'bg-blue-100 text-blue-700' 
+                                    : 'hover:bg-blue-50'
+                                }`}
+                              >
+                                {skill}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="px-3 py-4 text-center">
+                              <p className="text-sm text-gray-500 mb-2">
+                                "{editSkillInput.split(',').pop().trim()}" is not in the skills list
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                Only skills from the database can be added
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Skills Error */}
+                    {editFormErrors.keySkills && (
+                      <p className="text-red-500 text-xs mt-2">{editFormErrors.keySkills}</p>
+                    )}
+                  </div>
+
+                  {/* PDF Upload Section */}
+                  <div className="mt-6">
+                    <label className="block text-sm font-medium mb-2">Upload Resume (PDF)</label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex-1 cursor-pointer">
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 transition">
+                          <input
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            onChange={handleEditPdfUpload}
+                            className="hidden"
+                          />
+                          <Upload className="mx-auto h-8 w-8 text-gray-400" />
+                          <p className="mt-1 text-sm text-gray-500">
+                            {editPdfFile ? editPdfFile.name : editingCandidate?.resumePath ? "Replace existing resume" : "Click to upload PDF"}
+                          </p>
+                        </div>
+                      </label>
+                      {editPdfFile && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditPdfFile(null);
+                            setEditFormData(prev => ({ ...prev, resumePdf: null }));
+                          }}
+                          className="p-2 text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3 justify-end mt-8">
                     <button
                       type="button"
-                      onClick={() => handleEditSkillRemove(skill)}
-                      className="hover:text-blue-600 focus:outline-none"
+                      onClick={() => {
+                        setShowEditModal(false);
+                        setEditingCandidate(null);
+                        setEditFormData({
+                          name: "",
+                          email: "",
+                          mobile: "",
+                          experience: "",
+                          currentOrg: "",
+                          currentCTC: "",
+                          expectedCTC: "",
+                          noticePeriod: "",
+                          profileSourcedBy: "",
+                          clientName: "",
+                          profileSubmissionDate: "",
+                          keySkills: [],
+                          visaType: "NA",
+                          resumePdf: null
+                        });
+                        setEditSkillInput("");
+                        setEditPdfFile(null);
+                        setEditFormErrors({});
+                      }}
+                      className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                      disabled={editLoading}
                     >
-                      <X size={14} />
+                      Cancel
                     </button>
-                  </span>
-                ))}
-                
-                {/* Input field for new skills */}
-                <input
-                  type="text"
-                  value={editSkillInput}
-                  onChange={handleEditSkillInputChange}
-                  onKeyDown={handleEditSkillKeyDown}
-                  placeholder={editFormData.keySkills.length === 0 ? "Enter a skill and press Enter (use comma for multiple)" : ""}
-                  className="flex-1 min-w-[150px] outline-none bg-transparent"
-                />
+                    <button
+                      type="submit"
+                      disabled={editLoading}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {editLoading ? (
+                        <>
+                          <Loader size={18} className="animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={18} />
+                          Update Profile
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
               </div>
-              
-             {/* Add Button */}
-<button
-  type="button"
-  onClick={() => {
-    if (skillInput.trim()) {
-      const input = skillInput.trim();
-      
-      // Check if the input contains commas (multiple skills)
-      if (input.includes(',')) {
-        const skills = input.split(',').map(s => s.trim()).filter(s => s);
-        let invalidSkills = [];
-        
-        skills.forEach(s => {
-          const skillExists = skillSuggestions.some(
-            existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
-          );
-          if (!skillExists) {
-            invalidSkills.push(s);
-          }
-        });
-        
-        if (invalidSkills.length > 0) {
-          alert(`The following skills are not in the database: ${invalidSkills.join(', ')}. Only skills from the database can be added.`);
-        } else {
-          // All skills are valid - add them
-          skills.forEach(s => {
-            if (!newProfile.keySkills.includes(s)) {
-              setNewProfile(prev => ({
-                ...prev,
-                keySkills: [...prev.keySkills, s]
-              }));
-            }
-          });
-          
-          // Clear form errors if any
-          if (formErrors.keySkills) {
-            setFormErrors(prev => ({ ...prev, keySkills: null }));
-          }
-          
-          // Clear input and close suggestions
-          setSkillInput("");
-          setShowAddSkillSuggestions(false);
-          setSelectedAddSkillSuggestionIndex(0);
-        }
-      } else {
-        // Single skill - check if it exists
-        const skillExists = skillSuggestions.some(
-          existingSkill => existingSkill.toLowerCase() === input.toLowerCase()
-        );
-        
-        if (skillExists) {
-          if (!newProfile.keySkills.includes(input)) {
-            setNewProfile(prev => ({
-              ...prev,
-              keySkills: [...prev.keySkills, input]
-            }));
-          }
-          
-          // Clear form errors if any
-          if (formErrors.keySkills) {
-            setFormErrors(prev => ({ ...prev, keySkills: null }));
-          }
-          
-          // Clear input and close suggestions
-          setSkillInput("");
-          setShowAddSkillSuggestions(false);
-          setSelectedAddSkillSuggestionIndex(0);
-        } else {
-          // Show error message
-          alert(`"${input}" is not in the skills database. Only skills from the database can be added.`);
-        }
-      }
-    }
-  }}
-  disabled={!skillInput.trim()}
-  className="absolute right-2 top-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
->
-  Add
-</button>
-              
-            {/* Edit Skill Suggestions Dropdown */}
-{showEditSkillSuggestions && (
-  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-    {filteredEditSkillSuggestions.length > 0 ? (
-      filteredEditSkillSuggestions.map((skill, index) => (
-        <div
-          key={`edit-skill-suggestion-${skill}`}
-          onClick={() => {
-            handleEditSkillAdd(skill);
-          }}
-          className={`px-3 py-2 cursor-pointer text-sm ${
-            index === selectedEditSkillSuggestionIndex 
-              ? 'bg-blue-100 text-blue-700' 
-              : 'hover:bg-blue-50'
-          }`}
-        >
-          {skill}
-        </div>
-      ))
-    ) : (
-      <div className="px-3 py-4 text-center">
-        <p className="text-sm text-gray-500 mb-2">
-          "{editSkillInput.split(',').pop().trim()}" is not in the skills list
-        </p>
-        <p className="text-xs text-gray-400">
-          Only skills from the database can be added
-        </p>
-      </div>
-    )}
-  </div>
-)}
-            </div>
-
-            {/* Skills Error */}
-            {editFormErrors.keySkills && (
-              <p className="text-red-500 text-xs mt-2">{editFormErrors.keySkills}</p>
-            )}
-          </div>
-
-          {/* PDF Upload Section */}
-          <div className="mt-6">
-            <label className="block text-sm font-medium mb-2">Upload Resume (PDF)</label>
-            <div className="flex items-center gap-4">
-              <label className="flex-1 cursor-pointer">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 transition">
-                  <input
-  type="file"
-  accept=".pdf,application/pdf"
-  onChange={handleEditPdfUpload}
-  className="hidden"
-/>
-                  <Upload className="mx-auto h-8 w-8 text-gray-400" />
-                  <p className="mt-1 text-sm text-gray-500">
-                    {editPdfFile ? editPdfFile.name : editingCandidate?.resumePath ? "Replace existing resume" : "Click to upload PDF"}
-                  </p>
-                </div>
-              </label>
-              {editPdfFile && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditPdfFile(null);
-                    setEditFormData(prev => ({ ...prev, resumePdf: null }));
-                  }}
-                  className="p-2 text-red-500 hover:text-red-700"
-                >
-                  <Trash2 size={20} />
-                </button>
-              )}
             </div>
           </div>
+        )} 
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 justify-end mt-8">
-            <button
-              type="button"
-              onClick={() => {
-                setShowEditModal(false);
-                setEditingCandidate(null);
-                setEditFormData({
-                  name: "",
-                  email: "",
-                  mobile: "",
-                  experience: "",
-                  currentOrg: "",
-                  currentCTC: "",
-                  expectedCTC: "",
-                  noticePeriod: "",
-                  profileSourcedBy: "",
-                  clientName: "",
-                  profileSubmissionDate: "",
-                  keySkills: [],
-                  visaType: "NA",
-                  resumePdf: null
-                });
-                setEditSkillInput("");
-                setEditPdfFile(null);
-                setEditFormErrors({});
-              }}
-              className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-              disabled={editLoading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={editLoading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {editLoading ? (
-                <>
-                  <Loader size={18} className="animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <Save size={18} />
-                  Update Profile
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-)} 
         {/* DELETE CONFIRMATION MODAL */}
         {showDeleteConfirm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
