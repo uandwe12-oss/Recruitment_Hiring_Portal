@@ -47,7 +47,7 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch("https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app/api/login", {
+      const res = await fetch("https://recruitment-hiring-portal.vercel.app/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: email, password }),

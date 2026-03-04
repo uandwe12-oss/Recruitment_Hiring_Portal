@@ -270,7 +270,7 @@ const Recruiter = ({ user }) => {
   const fetchSkillsData = async () => {
     try {
       setSkillsLoading(true);
-      const response = await axios.get('https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app/api/skillsmatch/skills');
+      const response = await axios.get('https://recruitment-hiring-portal.vercel.app/api/skillsmatch/skills');
       console.log("Skills API response:", response.data);
       
       if (response.data.success && response.data.data) {
@@ -313,7 +313,7 @@ const Recruiter = ({ user }) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get('https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app/api/candidates/all');
+      const response = await axios.get('https://recruitment-hiring-portal.vercel.app/api/candidates/all');
       console.log("Candidates API response:", response.data);
       
       if (response.data.success) {
@@ -350,7 +350,7 @@ const Recruiter = ({ user }) => {
   // Check if email exists (excluding current candidate)
   const checkEmailExists = async (email, excludeId = null) => {
     try {
-      const url = `https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app/api/candidates/check-email/${encodeURIComponent(email)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
+      const url = `https://recruitment-hiring-portal.vercel.app/api/candidates/check-email/${encodeURIComponent(email)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
       const response = await axios.get(url);
       return response.data.exists;
     } catch (err) {
@@ -363,7 +363,7 @@ const Recruiter = ({ user }) => {
   const checkMobileExists = async (mobile, excludeId = null) => {
     try {
       const cleanMobile = mobile.replace(/\D/g, '');
-      const url = `https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app/api/candidates/check-mobile/${encodeURIComponent(cleanMobile)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
+      const url = `https://recruitment-hiring-portal.vercel.app/api/candidates/check-mobile/${encodeURIComponent(cleanMobile)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
       const response = await axios.get(url);
       return response.data.exists;
     } catch (err) {
@@ -396,7 +396,7 @@ const Recruiter = ({ user }) => {
     else if (candidate.resumePath) {
       const resumeUrl = candidate.resumePath.startsWith('http') 
         ? candidate.resumePath 
-        : `https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app${candidate.resumePath}`;
+        : `https://recruitment-hiring-portal.vercel.app${candidate.resumePath}`;
       
       console.log("Opening local resume:", resumeUrl);
       setSelectedResumeUrl(resumeUrl);
@@ -666,7 +666,7 @@ const Recruiter = ({ user }) => {
       
       console.log("Updating candidate with actual database ID:", candidateId);
       
-      const response = await axios.put(`https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app/api/candidates/${candidateId}`, formData, {
+      const response = await axios.put(`https://recruitment-hiring-portal.vercel.app/api/candidates/${candidateId}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -758,7 +758,7 @@ const Recruiter = ({ user }) => {
     try {
       setDeleteLoading(true);
       
-      const response = await axios.delete(`https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app/api/candidates/${deletingCandidateId}`);
+      const response = await axios.delete(`https://recruitment-hiring-portal.vercel.app/api/candidates/${deletingCandidateId}`);
       
       if (response.data.success) {
         setSuccessMessage("Profile deleted successfully!");
@@ -822,7 +822,7 @@ const Recruiter = ({ user }) => {
       setFilterLoading(true);
       setError(null);
       
-      const response = await axios.get(`https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app/api/skillsmatch?skill=${encodeURIComponent(skill)}`);
+      const response = await axios.get(`https://recruitment-hiring-portal.vercel.app/api/skillsmatch?skill=${encodeURIComponent(skill)}`);
       
       if (response.data.success) {
         const apiCandidates = response.data.data || [];
@@ -1131,7 +1131,7 @@ const Recruiter = ({ user }) => {
 
     try {
       setSkillsLoading(true);
-      const response = await axios.delete(`https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app/api/skills/${encodeURIComponent(skillName)}`);
+      const response = await axios.delete(`https://recruitment-hiring-portal.vercel.app/api/skills/${encodeURIComponent(skillName)}`);
 
       if (response.data.success) {
         await fetchSkillsData();
@@ -1242,7 +1242,7 @@ const Recruiter = ({ user }) => {
         formData.append('resume', newProfile.resumePdf);
       }
       
-      const response = await axios.post('https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app/api/candidates', formData, {
+      const response = await axios.post('https://recruitment-hiring-portal.vercel.app/api/candidates', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -1509,7 +1509,7 @@ const Recruiter = ({ user }) => {
       
       console.log("Query params:", params.toString());
       
-      const response = await axios.get(`https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app/api/shortcandidates/filter?${params.toString()}`);
+      const response = await axios.get(`https://recruitment-hiring-portal.vercel.app/api/shortcandidates/filter?${params.toString()}`);
       
       if (response.data.success) {
         const processedCandidates = response.data.data
@@ -2538,7 +2538,7 @@ const Recruiter = ({ user }) => {
                     {selectedCandidate.resumePath && (
                       <button
                         onClick={() => {
-                          setSelectedResumeUrl(`https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app${selectedCandidate.resumePath}`);
+                          setSelectedResumeUrl(`https://recruitment-hiring-portal.vercel.app${selectedCandidate.resumePath}`);
                           setShowResumeModal(true);
                         }}
                         className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
