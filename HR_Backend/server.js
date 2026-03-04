@@ -24,8 +24,8 @@ const corsOptions = {
 // Apply CORS globally
 app.use(cors(corsOptions));
 
-// ✅ Explicit OPTIONS handler for all routes
-app.options('/*', (req, res) => {
+// ✅ FIXED: Use named wildcard parameter '/*splat' instead of '/*'
+app.options('/*splat', (req, res) => {
   res.header('Access-Control-Allow-Origin', 'https://recruitment-hiring-portal-ibsf.vercel.app');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, X-Requested-With, Accept');
