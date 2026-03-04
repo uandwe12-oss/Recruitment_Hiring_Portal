@@ -9,7 +9,7 @@ const app = express();
 
 // ✅ Updated CORS configuration - SINGLE SOURCE OF TRUTH
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'],
+  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'https://recruitment-hiring-portal-ibsf.vercel.app'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept'],
@@ -88,17 +88,19 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 🔹 Start server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log("\n" + "=".repeat(50));
-  console.log(`🚀 Server is running on port ${PORT}`);
-  console.log("=".repeat(50));
-  console.log(`📍 Local: http://localhost:${PORT}`);
-  console.log(`📚 Swagger Docs: http://localhost:${PORT}/api-docs`);
-  console.log(`✅ Test endpoint: http://localhost:${PORT}/test`);
-  console.log(`👥 Candidates API: http://localhost:${PORT}/api/candidates`);
-  console.log(`📊 Demand API: http://localhost:${PORT}/api/demand`);
-  console.log(`🔐 Login API: http://localhost:${PORT}/api/login`);
-  console.log("=".repeat(50) + "\n");
-});
+module.exports = app;
+
+// // 🔹 Start server
+// const PORT = process.env.PORT || 5000;
+// app.listen(PORT, () => {
+//   console.log("\n" + "=".repeat(50));
+//   console.log(`🚀 Server is running on port ${PORT}`);
+//   console.log("=".repeat(50));
+//   console.log(`📍 Local: http://localhost:${PORT}`);
+//   console.log(`📚 Swagger Docs: http://localhost:${PORT}/api-docs`);
+//   console.log(`✅ Test endpoint: http://localhost:${PORT}/test`);
+//   console.log(`👥 Candidates API: http://localhost:${PORT}/api/candidates`);
+//   console.log(`📊 Demand API: http://localhost:${PORT}/api/demand`);
+//   console.log(`🔐 Login API: http://localhost:${PORT}/api/login`);
+//   console.log("=".repeat(50) + "\n");
+// });
