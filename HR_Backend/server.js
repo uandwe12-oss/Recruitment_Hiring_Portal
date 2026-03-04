@@ -16,9 +16,7 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-// ❌ REMOVE the custom preflight handler below
-// The cors() middleware already handles OPTIONS requests
-app.options('*', cors());
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 //app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
