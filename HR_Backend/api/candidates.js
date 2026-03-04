@@ -34,12 +34,6 @@ const upload = multer({
   }
 });
 
-// Local upload directory for fallback
-const uploadDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-  console.log('📁 Created uploads directory at:', uploadDir);
-}
 
 // ============================================
 // GOOGLE DRIVE HELPER FUNCTIONS
