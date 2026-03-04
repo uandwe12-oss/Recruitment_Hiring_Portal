@@ -7,18 +7,11 @@ const path = require("path");
 
 const app = express();
 
-/* ================================
-CORS CONFIGURATION (FIXED ⭐)
-================================ */
-
 const corsOptions = {
-origin: [
-"https://recruitment-hiring-portal-ibsf.vercel.app",
-"https://recruitment-hiring-portal-ibsf-7ffylnjhd-uandwe12-oss-projects.vercel.app"
-],
-credentials: true,
-methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-allowedHeaders: ["Content-Type", "Authorization", "Origin", "X-Requested-With", "Accept"]
+  origin: "https://recruitment-hiring-portal-ibsf.vercel.app",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 };
 
 app.use(cors(corsOptions));
