@@ -7,7 +7,7 @@ const path = require('path');
 
 const app = express();
 
-// ✅ Updated CORS configuration
+// ✅ Updated CORS configuration - SINGLE SOURCE OF TRUTH
 app.use(cors({
   origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'],
   credentials: true,
@@ -16,17 +16,8 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-// Handle preflight requests
-app.use((req, res, next) => {
-  if (req.method === 'OPTIONS') {
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, X-Requested-With, Accept');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    return res.sendStatus(200);
-  }
-  next();
-});
+// ❌ REMOVE the custom preflight handler below
+// The cors() middleware already handles OPTIONS requests
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -71,7 +62,6 @@ app.use("/api/candidates", candidatesRoute);
 app.use("/api/skills", skillsRoute);
 app.use("/api/skillsmatch", skillsMatchRoute);
 app.use("/api/shortcandidates", shortcandidatesRoute);
-
 
 // 🔹 Test endpoint
 app.get("/test", (req, res) => {
