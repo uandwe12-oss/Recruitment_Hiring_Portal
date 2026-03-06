@@ -579,12 +579,12 @@ const Recruiter = ({ user }) => {
         return;
       }
       
-      const maxSize = 100 * 1024;
-      if (file.size > maxSize) {
-        alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
-        e.target.value = '';
-        return;
-      }
+      // const maxSize = 100 * 1024;
+      // if (file.size > maxSize) {
+      //   alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
+      //   e.target.value = '';
+      //   return;
+      // }
       
       setEditPdfFile(file);
       setEditFormData(prev => ({ ...prev, resumePdf: file }));
@@ -920,12 +920,12 @@ const Recruiter = ({ user }) => {
         return;
       }
       
-      const maxSize = 100 * 1024;
-      if (file.size > maxSize) {
-        alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
-        e.target.value = '';
-        return;
-      }
+      // const maxSize = 100 * 1024;
+      // if (file.size > maxSize) {
+      //   alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
+      //   e.target.value = '';
+      //   return;
+      // }
       
       setPdfFile(file);
       setNewProfile(prev => ({ ...prev, resumePdf: file }));
