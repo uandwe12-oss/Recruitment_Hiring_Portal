@@ -234,7 +234,8 @@ const toNumber = (value) => {
 router.use((req, res, next) => {
   res.header(
     'Access-Control-Allow-Origin',
-"https://myuandwe-bg.vercel.app",  );
+    'https://myuandwe.vercel.app'
+  );
 
   res.header(
     'Access-Control-Allow-Headers',
