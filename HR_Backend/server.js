@@ -8,7 +8,7 @@ const path = require("path");
 const app = express();
 
 const corsOptions = {
-  origin: "https://recruitment-hiring-portal-ibsf.vercel.app",
+  origin: "https://myuandwe-bg.vercel.app",
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
