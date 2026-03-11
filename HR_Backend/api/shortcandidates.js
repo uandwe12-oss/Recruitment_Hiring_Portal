@@ -60,7 +60,7 @@ const toNumber = (value) => {
 
 router.use((req, res, next) => {
   const allowedOrigins = [
-    "https://recruitment-hiring-portal.vercel.app",
+    "https://myuandwe.vercel.app",
     "https://recruitment-hiring-portal-ibsf.vercel.app"
   ];
 

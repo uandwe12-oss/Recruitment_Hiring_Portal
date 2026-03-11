@@ -8,7 +8,7 @@ const path = require("path");
 const app = express();
 
 const corsOptions = {
-  origin: "https://myuandwe-bg.vercel.app",
+  origin: "https://myuandwe.vercel.app",
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
@@ -48,21 +48,21 @@ SWAGGER CONFIG
 ================================ */
 
 const swaggerOptions = {
-definition: {
-openapi: "3.0.0",
-info: {
-title: "HR Backend API",
-version: "1.0.0",
-description: "API documentation for HR Management System"
-},
-servers: [
-{
-url: "https://recruitment-hiring-portal-c7rqt3y5w-uandwe12-oss-projects.vercel.app",
-description: "Production Server"
-}
-]
-},
-apis: ["./api/*.js"]
+  definition: {
+    openapi: "3.0.0",
+    info: {
+      title: "HR Backend API",
+      version: "1.0.0",
+      description: "API documentation for HR Management System"
+    },
+    servers: [
+      {
+        url: "https://myuandwe-bg.vercel.app",
+        description: "Production Server"
+      }
+    ]
+  },
+  apis: ["./api/*.js"]
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
