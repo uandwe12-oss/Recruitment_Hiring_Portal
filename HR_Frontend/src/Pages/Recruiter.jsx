@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
-import Header from "../components/Header";
+import Header from "../Components/Header";
+import { useLocation } from "react-router-dom";
 import bgImage from "../assets/Images/back.png";
+import { useSearchParams } from "react-router-dom";
 import { 
   Search, 
   Mail, 
@@ -42,6 +44,10 @@ import "react-datepicker/dist/react-datepicker.css";
 const Recruiter = ({ user }) => {
   console.log("🔍 Recruiter received user:", user);
   console.log("🔍 User role from props:", user?.role);
+  console.log("Recruiter component mounted with user:", user);
+
+  
+  const [searchParams] = useSearchParams(); // Add this hook
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSkill, setSelectedSkill] = useState("All");
   const [selectedCandidates, setSelectedCandidates] = useState([]);
@@ -197,38 +203,42 @@ const Recruiter = ({ user }) => {
     return [];
   };
 
-  // Helper function to process candidate data
-  const processCandidate = (candidate) => {
-    if (!candidate) return null;
-    
-    const actualId = candidate.Can_ID || candidate.canId || candidate.id;
-    
-    const processed = {
-      actualId: actualId ? Number(actualId) : null,
-      id: actualId ? Number(actualId) : `temp-${Date.now()}-${Math.random()}`,
-      name: candidate['Candidate Name'] || candidate.name || '',
-      email: candidate.Email || candidate.email || '',
-      mobile: candidate['Mobile No'] || candidate.mobile || '',
-      experience: candidate.Experience || candidate.experience || '',
-      currentOrg: candidate['Current Org'] || candidate.currentOrg || '',
-      currentCTC: candidate['Current CTC'] || candidate.currentCTC || '',
-      expectedCTC: candidate['Expected CTC'] || candidate.expectedCTC || '',
-      noticePeriod: candidate['Notice Period in days'] || candidate.noticePeriod || '',
-      profileSourcedBy: candidate['Profiles sourced by'] || candidate.profileSourcedBy || '',
-      clientName: candidate['Client Name'] || candidate.clientName || '',
-      profileSubmissionDate: candidate['Profile submission date'] || candidate.profileSubmissionDate || '',
-      visaType: candidate['Visa type'] || candidate.visaType || 'NA',
-      resumePath: candidate.resumePath || '',
-      googleDriveFileId: candidate.googleDriveFileId || '',
-      googleDriveViewLink: candidate.googleDriveViewLink || '',
-      googleDriveDownloadLink: candidate.googleDriveDownloadLink || '',
-      keySkills: parseKeySkills(candidate['Key Skills'] || candidate.keySkills)
-    };
-    
-    processed.experienceNum = parseFloat(processed.experience) || 0;
-    
-    return processed;
+// Helper function to process candidate data
+const processCandidate = (candidate) => {
+  if (!candidate) return null;
+  
+  // Get the actual Can_ID - this is the most important part
+  const canId = candidate.Can_ID || candidate.canId || candidate.id;
+  
+  const processed = {
+    canId: canId ? Number(canId) : null, // Store canId separately
+    actualId: canId ? Number(canId) : null,
+    id: canId ? Number(canId) : `temp-${Date.now()}-${Math.random()}`, // Use canId as id
+    name: candidate['Candidate Name'] || candidate.name || '',
+    email: candidate.Email || candidate.email || '',
+    mobile: candidate['Mobile No'] || candidate.mobile || '',
+    experience: candidate.Experience || candidate.experience || '',
+    currentOrg: candidate['Current Org'] || candidate.currentOrg || '',
+    currentCTC: candidate['Current CTC'] || candidate.currentCTC || '',
+    expectedCTC: candidate['Expected CTC'] || candidate.expectedCTC || '',
+    noticePeriod: candidate['Notice Period in days'] || candidate.noticePeriod || '',
+    profileSourcedBy: candidate['Profiles sourced by'] || candidate.profileSourcedBy || '',
+    clientName: candidate['Client Name'] || candidate.clientName || '',
+    profileSubmissionDate: candidate['Profile submission date'] || candidate.profileSubmissionDate || '',
+    visaType: candidate['Visa type'] || candidate.visaType || 'NA',
+    resumePath: candidate.resumePath || '',
+    googleDriveFileId: candidate.googleDriveFileId || '',
+    googleDriveViewLink: candidate.googleDriveViewLink || '',
+    googleDriveDownloadLink: candidate.googleDriveDownloadLink || '',
+    keySkills: parseKeySkills(candidate['Key Skills'] || candidate.keySkills)
   };
+  
+  processed.experienceNum = parseFloat(processed.experience) || 0;
+  
+  console.log(`Processed candidate: ${processed.name} with Can_ID: ${processed.canId}`);
+  
+  return processed;
+};
 
   // Update skill counts based on candidates
   const updateSkillCounts = (candidatesList) => {
@@ -266,11 +276,169 @@ const Recruiter = ({ user }) => {
     setSkillCounts(counts);
   };
 
+// Add this function in Recruiter component
+const handleSubmitSelectedCandidates = async () => {
+  if (selectedCandidates.length === 0) {
+    alert("Please select at least one candidate");
+    return;
+  }
+
+  try {
+    setSubmitLoading(true);
+    
+    // Get demandId from URL params
+    const demandId = searchParams.get('demandId');
+    
+    if (!demandId) {
+      alert("Demand ID not found");
+      return;
+    }
+    
+    // Log the selected candidates to verify Can_IDs
+    console.log("Selected candidates with Can_IDs:", selectedCandidates.map(c => ({
+      name: c.name,
+      canId: c.canId,
+      id: c.id
+    })));
+    
+    // Prepare selected candidates data
+    const selectedData = {
+      candidates: selectedCandidates.map(c => ({
+        canId: c.canId || c.actualId || c.id, // Use canId as primary
+        name: c.name,
+        email: c.email,
+        mobile: c.mobile,
+        experience: c.experience,
+        currentOrg: c.currentOrg,
+        currentCTC: c.currentCTC,
+        expectedCTC: c.expectedCTC,
+        noticePeriod: c.noticePeriod,
+        profileSourcedBy: c.profileSourcedBy,
+        clientName: c.clientName,
+        profileSubmissionDate: c.profileSubmissionDate,
+        visaType: c.visaType,
+        resumePath: c.resumePath,
+        googleDriveViewLink: c.googleDriveViewLink,
+        keySkills: c.keySkills,
+        selectedAt: new Date().toISOString(),
+        status: 'Selected'
+      })),
+      selectedBy: user?.name || user?.email || 'Unknown'
+    };
+    
+    console.log(`Saving ${selectedCandidates.length} candidates for demand ${demandId}`);
+    console.log("Selected data being sent:", selectedData);
+    
+    // Save to backend
+    const response = await axios.post(
+      `http://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`,
+      selectedData
+    );
+    
+    if (response.data.success) {
+      setSuccessMessage(`Successfully saved ${selectedCandidates.length} candidates!`);
+      
+      // Clear selected candidates after successful save
+      setSelectedCandidates([]);
+      
+      // Optionally, navigate back to demand after short delay
+      setTimeout(() => {
+        window.location.href = '/demand';
+      }, 2000);
+    }
+    
+  } catch (err) {
+    console.error('Error saving selected candidates:', err);
+    setError(err.response?.data?.message || "Failed to save selected candidates");
+  } finally {
+    setSubmitLoading(false);
+  }
+};
+
+// Inside the Recruiter component, add:
+const location = useLocation();
+
+// Add this useEffect to handle URL parameters
+useEffect(() => {
+  const applyFiltersFromUrl = async () => {
+    const params = new URLSearchParams(location.search);
+    
+    // Check if we should auto-apply filters
+    if (params.get('autoFilter') === 'true') {
+      const primarySkills = params.get('primarySkills')?.split(',').filter(s => s) || [];
+      const secondarySkills = params.get('secondarySkills')?.split(',').filter(s => s) || [];
+      const minExperience = params.get('minExperience');
+      const maxExperience = params.get('maxExperience');
+      
+      // Set the search filters state
+      setSearchFilters({
+        primarySkills: primarySkills,
+        secondarySkills: secondarySkills,
+        experienceMin: minExperience || "",
+        experienceMax: maxExperience || "",
+        location: ""
+      });
+      
+      // Set the input fields for display
+      setPrimarySkillInput(primarySkills.join(', '));
+      setSecondarySkillInput(secondarySkills.join(', '));
+      
+      // Apply the filters automatically
+      try {
+        setFilterLoading(true);
+        
+        // Build the API request
+        const apiParams = new URLSearchParams();
+        
+        if (primarySkills.length > 0) {
+          apiParams.append('primarySkills', primarySkills.join(','));
+        }
+        
+        if (secondarySkills.length > 0) {
+          apiParams.append('secondarySkills', secondarySkills.join(','));
+        }
+        
+        if (minExperience) {
+          apiParams.append('minExperience', minExperience);
+        }
+        
+        if (maxExperience) {
+          apiParams.append('maxExperience', maxExperience);
+        }
+        
+        console.log("Auto-applying filters from demand:", apiParams.toString());
+        
+        const response = await axios.get(`http://myuandwe-bg.vercel.app/api/shortcandidates/filter?${apiParams.toString()}`);
+        
+        if (response.data.success) {
+          const processedCandidates = response.data.data
+            .map(processCandidate)
+            .filter(c => c !== null);
+          
+          console.log(`Found ${processedCandidates.length} candidates matching demand requirements`);
+          setDisplayedCandidates(processedCandidates);
+          setCurrentPage(1);
+          setSelectedSkill("All");
+          setSearchTerm("");
+        }
+      } catch (err) {
+        console.error('Error auto-applying filters:', err);
+        setError(err.message || "Failed to filter candidates");
+      } finally {
+        setFilterLoading(false);
+      }
+    }
+  };
+  
+  if (candidates.length > 0) {
+    applyFiltersFromUrl();
+  }
+}, [location.search, candidates.length]); // Re-run when URL changes or candidates load
   // Fetch skills data from API
   const fetchSkillsData = async () => {
     try {
       setSkillsLoading(true);
-      const response = await axios.get('https://myuandwe-bg.vercel.app/api/skillsmatch/skills');
+      const response = await axios.get('http://myuandwe-bg.vercel.app/api/skillsmatch/skills');
       console.log("Skills API response:", response.data);
       
       if (response.data.success && response.data.data) {
@@ -307,13 +475,96 @@ const Recruiter = ({ user }) => {
       setSkillsLoading(false);
     }
   };
-
+  useEffect(() => {
+    const autoFilterFromDemand = async () => {
+      // Check if we should auto-apply filters
+      if (searchParams.get('autoFilter') === 'true') {
+        const primarySkills = searchParams.get('primarySkills')?.split(',').filter(s => s) || [];
+        const secondarySkills = searchParams.get('secondarySkills')?.split(',').filter(s => s) || [];
+        const minExperience = searchParams.get('minExperience');
+        const maxExperience = searchParams.get('maxExperience');
+        const demandId = searchParams.get('demandId');
+        
+        console.log(`🔍 Auto-filtering for demand ID: ${demandId}`);
+        console.log('Primary skills:', primarySkills);
+        console.log('Secondary skills:', secondarySkills);
+        console.log('Experience range:', minExperience, '-', maxExperience);
+        
+        // Set the search filters state
+        setSearchFilters({
+          primarySkills: primarySkills,
+          secondarySkills: secondarySkills,
+          experienceMin: minExperience || "",
+          experienceMax: maxExperience || "",
+          location: ""
+        });
+        
+        // Set the input fields for display
+        setPrimarySkillInput(primarySkills.join(', '));
+        setSecondarySkillInput(secondarySkills.join(', '));
+        
+        // Apply the filters
+        try {
+          setFilterLoading(true);
+          
+          // Build the API request
+          const params = new URLSearchParams();
+          
+          if (primarySkills.length > 0) {
+            params.append('primarySkills', primarySkills.join(','));
+          }
+          
+          if (secondarySkills.length > 0) {
+            params.append('secondarySkills', secondarySkills.join(','));
+          }
+          
+          if (minExperience) {
+            params.append('minExperience', minExperience);
+          }
+          
+          if (maxExperience) {
+            params.append('maxExperience', maxExperience);
+          }
+          
+          console.log("Calling filter API with:", params.toString());
+          
+          const response = await axios.get(`http://myuandwe-bg.vercel.app/api/shortcandidates/filter?${params.toString()}`);
+          
+          if (response.data.success) {
+            const processedCandidates = response.data.data
+              .map(processCandidate)
+              .filter(c => c !== null);
+            
+            console.log(`✅ Found ${processedCandidates.length} candidates matching demand requirements`);
+            setDisplayedCandidates(processedCandidates);
+            setCurrentPage(1);
+            setSelectedSkill("All");
+            setSearchTerm("");
+            
+            // Show success message
+            setSuccessMessage(`Found ${processedCandidates.length} candidates matching this demand`);
+            setTimeout(() => setSuccessMessage(""), 3000);
+          }
+        } catch (err) {
+          console.error('❌ Error auto-applying filters:', err);
+          setError("Failed to filter candidates for this demand");
+        } finally {
+          setFilterLoading(false);
+        }
+      }
+    };
+    
+    // Only run if candidates are loaded
+    if (candidates.length > 0) {
+      autoFilterFromDemand();
+    }
+  }, [searchParams, candidates.length]); 
   // Fetch all candidates
   const fetchAllCandidates = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get('https://myuandwe-bg.vercel.app/api/candidates/all');
+      const response = await axios.get('http://myuandwe-bg.vercel.app/api/candidates/all');
       console.log("Candidates API response:", response.data);
       
       if (response.data.success) {
@@ -350,7 +601,7 @@ const Recruiter = ({ user }) => {
   // Check if email exists (excluding current candidate)
   const checkEmailExists = async (email, excludeId = null) => {
     try {
-      const url = `https://myuandwe-bg.vercel.app/api/candidates/check-email/${encodeURIComponent(email)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
+      const url = `http://myuandwe-bg.vercel.app/api/candidates/check-email/${encodeURIComponent(email)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
       const response = await axios.get(url);
       return response.data.exists;
     } catch (err) {
@@ -363,7 +614,7 @@ const Recruiter = ({ user }) => {
   const checkMobileExists = async (mobile, excludeId = null) => {
     try {
       const cleanMobile = mobile.replace(/\D/g, '');
-      const url = `https://myuandwe-bg.vercel.app/api/candidates/check-mobile/${encodeURIComponent(cleanMobile)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
+      const url = `http://myuandwe-bg.vercel.app/api/candidates/check-mobile/${encodeURIComponent(cleanMobile)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
       const response = await axios.get(url);
       return response.data.exists;
     } catch (err) {
@@ -396,7 +647,7 @@ const Recruiter = ({ user }) => {
     else if (candidate.resumePath) {
       const resumeUrl = candidate.resumePath.startsWith('http') 
         ? candidate.resumePath 
-        : `https://myuandwe-bg.vercel.app${candidate.resumePath}`;
+        : `http://myuandwe-bg.vercel.app${candidate.resumePath}`;
       
       console.log("Opening local resume:", resumeUrl);
       setSelectedResumeUrl(resumeUrl);
@@ -579,12 +830,12 @@ const Recruiter = ({ user }) => {
         return;
       }
       
-      // const maxSize = 100 * 1024;
-      // if (file.size > maxSize) {
-      //   alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
-      //   e.target.value = '';
-      //   return;
-      // }
+      const maxSize = 100 * 1024;
+      if (file.size > maxSize) {
+        alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
+        e.target.value = '';
+        return;
+      }
       
       setEditPdfFile(file);
       setEditFormData(prev => ({ ...prev, resumePdf: file }));
@@ -666,7 +917,7 @@ const Recruiter = ({ user }) => {
       
       console.log("Updating candidate with actual database ID:", candidateId);
       
-      const response = await axios.put(`https://myuandwe-bg.vercel.app/api/candidates/${candidateId}`, formData, {
+      const response = await axios.put(`http://myuandwe-bg.vercel.app/api/candidates/${candidateId}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -758,7 +1009,7 @@ const Recruiter = ({ user }) => {
     try {
       setDeleteLoading(true);
       
-      const response = await axios.delete(`https://myuandwe-bg.vercel.app/api/candidates/${deletingCandidateId}`);
+      const response = await axios.delete(`http://myuandwe-bg.vercel.app/api/candidates/${deletingCandidateId}`);
       
       if (response.data.success) {
         setSuccessMessage("Profile deleted successfully!");
@@ -822,7 +1073,7 @@ const Recruiter = ({ user }) => {
       setFilterLoading(true);
       setError(null);
       
-      const response = await axios.get(`https://myuandwe-bg.vercel.app/api/skillsmatch?skill=${encodeURIComponent(skill)}`);
+      const response = await axios.get(`http://myuandwe-bg.vercel.app/api/skillsmatch?skill=${encodeURIComponent(skill)}`);
       
       if (response.data.success) {
         const apiCandidates = response.data.data || [];
@@ -872,28 +1123,127 @@ const Recruiter = ({ user }) => {
     filterCandidatesBySkill(skill);
   };
 
-  // Handle adding candidate to selection
-  const handleSelectCandidate = (candidate, e) => {
-    e.stopPropagation();
-    if (!candidate || !candidate.id) {
-      console.error("Invalid candidate for selection:", candidate);
-      alert("Cannot select: Invalid candidate data");
+// Handle adding candidate to selection with auto-save
+const handleSelectCandidate = async (candidate, e) => {
+  e.stopPropagation();
+  if (!candidate || !candidate.id) {
+    console.error("Invalid candidate for selection:", candidate);
+    alert("Cannot select: Invalid candidate data");
+    return;
+  }
+  
+  // Check if already selected
+  const isAlreadySelected = selectedCandidates.some(c => c.id === candidate.id);
+  
+  if (!isAlreadySelected) {
+    try {
+      // Get demandId from URL params
+      const demandId = searchParams.get('demandId');
+      
+      if (!demandId) {
+        alert("Demand ID not found. Please make sure you came from a demand.");
+        return;
+      }
+      
+      console.log(`Saving candidate ${candidate.canId || candidate.id} for demand ${demandId}`);
+      
+      // Prepare candidate data with all necessary fields
+      const candidateData = {
+        canId: candidate.canId || candidate.actualId || candidate.id,
+        name: candidate.name || '',
+        email: candidate.email || '',
+        mobile: candidate.mobile || '',
+        experience: candidate.experience || '',
+        currentOrg: candidate.currentOrg || '',
+        currentCTC: candidate.currentCTC || '',
+        expectedCTC: candidate.expectedCTC || '',
+        noticePeriod: candidate.noticePeriod || '',
+        profileSourcedBy: candidate.profileSourcedBy || '',
+        clientName: candidate.clientName || '',
+        profileSubmissionDate: candidate.profileSubmissionDate || '',
+        visaType: candidate.visaType || 'NA',
+        resumePath: candidate.resumePath || '',
+        googleDriveViewLink: candidate.googleDriveViewLink || '',
+        keySkills: candidate.keySkills || [],
+        selectedAt: new Date().toISOString(),
+        status: 'In Progress'
+      };
+      
+      // Add to local state immediately for UI update
+      setSelectedCandidates(prev => [...prev, candidate]);
+      
+      // Show optimistic update
+      setSuccessMessage(`Adding ${candidate.name}...`);
+      
+      // Save to backend
+      const response = await axios.post(
+        `http://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`,
+        {
+          candidates: [candidateData],
+          selectedBy: user?.name || user?.email || 'Unknown'
+        }
+      );
+      
+      if (response.data.success) {
+        setSuccessMessage(`✅ ${candidate.name} added to demand successfully!`);
+        setTimeout(() => setSuccessMessage(""), 2000);
+      }
+      
+    } catch (err) {
+      console.error('Error saving candidate:', err);
+      
+      // Remove from local state if save failed
+      setSelectedCandidates(prev => prev.filter(c => c.id !== candidate.id));
+      
+      // Show error message
+      if (err.response?.status === 404) {
+        setError("Selected candidates API not found. Please check backend.");
+      } else if (err.response?.status === 400) {
+        setError(err.response.data?.message || "Invalid request");
+      } else {
+        setError(`Failed to save ${candidate.name}: ${err.response?.data?.message || err.message}`);
+      }
+      setTimeout(() => setError(null), 3000);
+    }
+  }
+};
+
+// Handle removing candidate from selection
+const handleRemoveCandidate = async (candidateId, e) => {
+  if (e) e.stopPropagation();
+  if (!candidateId) return;
+  
+  // Find the candidate name for the message
+  const candidate = selectedCandidates.find(c => c.id === candidateId);
+  
+  try {
+    // Get demandId from URL params
+    const demandId = searchParams.get('demandId');
+    
+    if (!demandId) {
+      alert("Demand ID not found");
       return;
     }
     
-    const isAlreadySelected = selectedCandidates.some(c => c.id === candidate.id);
+    // Remove from local state immediately
+    setSelectedCandidates(prev => prev.filter(c => c.id !== candidateId));
     
-    if (!isAlreadySelected) {
-      setSelectedCandidates(prev => [...prev, candidate]);
-    }
-  };
+    setSuccessMessage(`Removing ${candidate?.name || 'candidate'}...`);
+    
+    // Remove from database
+    await axios.delete(`http://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}/${candidateId}`);
+    
+    setSuccessMessage(`✅ ${candidate?.name || 'Candidate'} removed from demand`);
+    setTimeout(() => setSuccessMessage(""), 2000);
+    
+  } catch (err) {
+    console.error('Error removing candidate:', err);
+    setError("Failed to remove candidate");
+    setTimeout(() => setError(null), 3000);
+  }
+};
 
-  // Handle removing candidate from selection
-  const handleRemoveCandidate = (candidateId, e) => {
-    if (e) e.stopPropagation();
-    if (!candidateId) return;
-    setSelectedCandidates(selectedCandidates.filter(c => c.id !== candidateId));
-  };
+
 
   // Handle sending email
   const handleSendEmail = (email, e) => {
@@ -920,12 +1270,12 @@ const Recruiter = ({ user }) => {
         return;
       }
       
-      // const maxSize = 100 * 1024;
-      // if (file.size > maxSize) {
-      //   alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
-      //   e.target.value = '';
-      //   return;
-      // }
+      const maxSize = 100 * 1024;
+      if (file.size > maxSize) {
+        alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
+        e.target.value = '';
+        return;
+      }
       
       setPdfFile(file);
       setNewProfile(prev => ({ ...prev, resumePdf: file }));
@@ -1131,7 +1481,7 @@ const Recruiter = ({ user }) => {
 
     try {
       setSkillsLoading(true);
-      const response = await axios.delete(`https://myuandwe-bg.vercel.app/api/skills/${encodeURIComponent(skillName)}`);
+      const response = await axios.delete(`http://myuandwe-bg.vercel.app/api/skills/${encodeURIComponent(skillName)}`);
 
       if (response.data.success) {
         await fetchSkillsData();
@@ -1242,7 +1592,7 @@ const Recruiter = ({ user }) => {
         formData.append('resume', newProfile.resumePdf);
       }
       
-      const response = await axios.post('https://myuandwe-bg.vercel.app/api/candidates', formData, {
+      const response = await axios.post('http://myuandwe-bg.vercel.app/api/candidates', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -1509,7 +1859,7 @@ const Recruiter = ({ user }) => {
       
       console.log("Query params:", params.toString());
       
-      const response = await axios.get(`https://myuandwe-bg.vercel.app/api/shortcandidates/filter?${params.toString()}`);
+      const response = await axios.get(`http://myuandwe-bg.vercel.app/api/shortcandidates/filter?${params.toString()}`);
       
       if (response.data.success) {
         const processedCandidates = response.data.data
@@ -1638,6 +1988,29 @@ const Recruiter = ({ user }) => {
     }
   };
 
+  // Add this useEffect to fetch existing selected candidates when component mounts
+useEffect(() => {
+  const fetchExistingSelections = async () => {
+    const demandId = searchParams.get('demandId');
+    if (demandId && candidates.length > 0) {
+      try {
+        const response = await axios.get(`http://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`);
+        if (response.data.success) {
+          // Filter to only include candidates that exist in the current candidates list
+          const existingCandidates = response.data.data.filter(saved => 
+            candidates.some(c => c.id === saved.id)
+          );
+          setSelectedCandidates(existingCandidates);
+        }
+      } catch (err) {
+        console.error('Error fetching existing selections:', err);
+      }
+    }
+  };
+  
+  fetchExistingSelections();
+}, [searchParams, candidates]); // Run when URL params or candidates change
+
   // Load data on component mount
   useEffect(() => {
     fetchAllCandidates();
@@ -1726,33 +2099,59 @@ const Recruiter = ({ user }) => {
               </p>
             </div>
 
-            <div className="flex gap-3 items-center">
-              <button
-                onClick={() => setShowAddProfile(true)}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition"
-              >
-                <Plus size={18} />
-                Add Profile
-              </button>
+          <div className="flex gap-3 items-center">
+  <button
+    onClick={() => setShowAddProfile(true)}
+    className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition"
+  >
+    <Plus size={18} />
+    Add Profile
+  </button>
 
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search candidates..."
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  onClick={handleSearchClick}
-                  className="pl-10 pr-4 py-2 border-2 border-blue-500 rounded-xl w-64 
-                           focus:border-blue-600 focus:ring-2 focus:ring-blue-200 
-                           outline-none"
-                />
-                <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-              </div>
-            </div>
+
+
+  <div className="relative">
+    <input
+      type="text"
+      placeholder="Search candidates..."
+      value={searchTerm}
+      onChange={(e) => {
+        setSearchTerm(e.target.value);
+        setCurrentPage(1);
+      }}
+      onClick={handleSearchClick}
+      className="pl-10 pr-4 py-2 border-2 border-blue-500 rounded-xl w-64 
+               focus:border-blue-600 focus:ring-2 focus:ring-blue-200 
+               outline-none"
+    />
+    <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+  </div>
+</div>
           </div>
+          {/* REMOVE THIS ENTIRE BLOCK */}
+{searchParams.get('autoFilter') === 'true' && (
+  <button
+    onClick={handleSubmitSelectedCandidates}
+    disabled={selectedCandidates.length === 0 || submitLoading}
+    className={`flex items-center gap-2 px-6 py-2 rounded-xl shadow transition ${
+      selectedCandidates.length > 0 && !submitLoading
+        ? 'bg-green-600 text-white hover:bg-green-700' 
+        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+    }`}
+  >
+    {submitLoading ? (
+      <>
+        <Loader size={18} className="animate-spin" />
+        Saving...
+      </>
+    ) : (
+      <>
+        <CheckCircle size={18} />
+        Save Selected ({selectedCandidates.length})
+      </>
+    )}
+  </button>
+)}
 
           {/* Filter Summary with Edit Button */}
           {(searchFilters.primarySkills.length > 0 || searchFilters.secondarySkills.length > 0 || searchFilters.experienceMin || searchFilters.experienceMax) && (
@@ -2203,33 +2602,38 @@ const Recruiter = ({ user }) => {
                                   </span>
                                 )}
                                 
-                                <div className="flex gap-1 ml-2 flex-shrink-0">
-                                  <button
-                                    onClick={(e) => handleEditClick(candidate, e)}
-                                    className="p-1.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
-                                    title="Edit Candidate"
-                                  >
-                                    <Edit2 size={16} />
-                                  </button>
-                                  <button
-                                    onClick={(e) => handleDeleteClick(candidate, e)}
-                                    className="p-1.5 rounded bg-red-100 text-red-700 hover:bg-red-200"
-                                    title="Delete Candidate"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                  <button
-                                    onClick={(e) => handleSelectCandidate(candidate, e)}
-                                    disabled={selectedCandidates.some(c => c.id === candidate.id)}
-                                    className={`px-3 py-1 rounded text-sm ${
-                                      selectedCandidates.some(c => c.id === candidate.id)
-                                        ? "bg-green-100 text-green-800 cursor-default"
-                                        : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                                    }`}
-                                  >
-                                    {selectedCandidates.some(c => c.id === candidate.id) ? "Selected" : "Select"}
-                                  </button>
-                                </div>
+                              {/* In the candidate card, replace the Select button section */}
+<div className="flex gap-1 ml-2 flex-shrink-0">
+  <button
+    onClick={(e) => handleEditClick(candidate, e)}
+    className="p-1.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+    title="Edit Candidate"
+  >
+    <Edit2 size={16} />
+  </button>
+  <button
+    onClick={(e) => handleDeleteClick(candidate, e)}
+    className="p-1.5 rounded bg-red-100 text-red-700 hover:bg-red-200"
+    title="Delete Candidate"
+  >
+    <Trash2 size={16} />
+  </button>
+  
+  {/* Check if candidate is already selected for this demand */}
+  {selectedCandidates.some(c => c.id === candidate.id) ? (
+    <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded text-sm font-medium flex items-center gap-1">
+      <Clock size={14} />
+      In Progress
+    </span>
+  ) : (
+    <button
+      onClick={(e) => handleSelectCandidate(candidate, e)}
+      className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-sm font-medium"
+    >
+      Select
+    </button>
+  )}
+</div>
                               </div>
 
                               {/* Candidate Info */}
@@ -2538,7 +2942,7 @@ const Recruiter = ({ user }) => {
                     {selectedCandidate.resumePath && (
                       <button
                         onClick={() => {
-                          setSelectedResumeUrl(`https://myuandwe-bg.vercel.app${selectedCandidate.resumePath}`);
+                          setSelectedResumeUrl(`http://myuandwe-bg.vercel.app${selectedCandidate.resumePath}`);
                           setShowResumeModal(true);
                         }}
                         className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
@@ -2966,7 +3370,7 @@ const Recruiter = ({ user }) => {
                           <option value="L1">L1</option>
                           <option value="Green Card">Green Card</option>
                           <option value="Citizen">Citizen</option>
-                          <option value="Other">Other</option>
+                          <option value="Other">China</option>
                         </select>
                       </div>
                     </div>
