@@ -331,7 +331,7 @@ const handleSubmitSelectedCandidates = async () => {
     
     // Save to backend
     const response = await axios.post(
-      `http://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`,
+      `https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`,
       selectedData
     );
     
@@ -408,7 +408,7 @@ useEffect(() => {
         
         console.log("Auto-applying filters from demand:", apiParams.toString());
         
-        const response = await axios.get(`http://myuandwe-bg.vercel.app/api/shortcandidates/filter?${apiParams.toString()}`);
+        const response = await axios.get(`https://myuandwe-bg.vercel.app/api/shortcandidates/filter?${apiParams.toString()}`);
         
         if (response.data.success) {
           const processedCandidates = response.data.data
@@ -438,7 +438,7 @@ useEffect(() => {
   const fetchSkillsData = async () => {
     try {
       setSkillsLoading(true);
-      const response = await axios.get('http://myuandwe-bg.vercel.app/api/skillsmatch/skills');
+      const response = await axios.get('https://myuandwe-bg.vercel.app/api/skillsmatch/skills');
       console.log("Skills API response:", response.data);
       
       if (response.data.success && response.data.data) {
@@ -528,7 +528,7 @@ useEffect(() => {
           
           console.log("Calling filter API with:", params.toString());
           
-          const response = await axios.get(`http://myuandwe-bg.vercel.app/api/shortcandidates/filter?${params.toString()}`);
+          const response = await axios.get(`https://myuandwe-bg.vercel.app/api/shortcandidates/filter?${params.toString()}`);
           
           if (response.data.success) {
             const processedCandidates = response.data.data
@@ -564,7 +564,7 @@ useEffect(() => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get('http://myuandwe-bg.vercel.app/api/candidates/all');
+      const response = await axios.get('https://myuandwe-bg.vercel.app/api/candidates/all');
       console.log("Candidates API response:", response.data);
       
       if (response.data.success) {
@@ -601,7 +601,7 @@ useEffect(() => {
   // Check if email exists (excluding current candidate)
   const checkEmailExists = async (email, excludeId = null) => {
     try {
-      const url = `http://myuandwe-bg.vercel.app/api/candidates/check-email/${encodeURIComponent(email)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
+      const url = `https://myuandwe-bg.vercel.app/api/candidates/check-email/${encodeURIComponent(email)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
       const response = await axios.get(url);
       return response.data.exists;
     } catch (err) {
@@ -614,7 +614,7 @@ useEffect(() => {
   const checkMobileExists = async (mobile, excludeId = null) => {
     try {
       const cleanMobile = mobile.replace(/\D/g, '');
-      const url = `http://myuandwe-bg.vercel.app/api/candidates/check-mobile/${encodeURIComponent(cleanMobile)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
+      const url = `https://myuandwe-bg.vercel.app/api/candidates/check-mobile/${encodeURIComponent(cleanMobile)}${excludeId ? `?excludeId=${excludeId}` : ''}`;
       const response = await axios.get(url);
       return response.data.exists;
     } catch (err) {
@@ -647,7 +647,7 @@ useEffect(() => {
     else if (candidate.resumePath) {
       const resumeUrl = candidate.resumePath.startsWith('http') 
         ? candidate.resumePath 
-        : `http://myuandwe-bg.vercel.app${candidate.resumePath}`;
+        : `https://myuandwe-bg.vercel.app${candidate.resumePath}`;
       
       console.log("Opening local resume:", resumeUrl);
       setSelectedResumeUrl(resumeUrl);
@@ -917,7 +917,7 @@ useEffect(() => {
       
       console.log("Updating candidate with actual database ID:", candidateId);
       
-      const response = await axios.put(`http://myuandwe-bg.vercel.app/api/candidates/${candidateId}`, formData, {
+      const response = await axios.put(`https://myuandwe-bg.vercel.app/api/candidates/${candidateId}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -1009,7 +1009,7 @@ useEffect(() => {
     try {
       setDeleteLoading(true);
       
-      const response = await axios.delete(`http://myuandwe-bg.vercel.app/api/candidates/${deletingCandidateId}`);
+      const response = await axios.delete(`https://myuandwe-bg.vercel.app/api/candidates/${deletingCandidateId}`);
       
       if (response.data.success) {
         setSuccessMessage("Profile deleted successfully!");
@@ -1073,7 +1073,7 @@ useEffect(() => {
       setFilterLoading(true);
       setError(null);
       
-      const response = await axios.get(`http://myuandwe-bg.vercel.app/api/skillsmatch?skill=${encodeURIComponent(skill)}`);
+      const response = await axios.get(`https://myuandwe-bg.vercel.app/api/skillsmatch?skill=${encodeURIComponent(skill)}`);
       
       if (response.data.success) {
         const apiCandidates = response.data.data || [];
@@ -1177,7 +1177,7 @@ const handleSelectCandidate = async (candidate, e) => {
       
       // Save to backend
       const response = await axios.post(
-        `http://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`,
+        `https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`,
         {
           candidates: [candidateData],
           selectedBy: user?.name || user?.email || 'Unknown'
@@ -1231,7 +1231,7 @@ const handleRemoveCandidate = async (candidateId, e) => {
     setSuccessMessage(`Removing ${candidate?.name || 'candidate'}...`);
     
     // Remove from database
-    await axios.delete(`http://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}/${candidateId}`);
+    await axios.delete(`https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}/${candidateId}`);
     
     setSuccessMessage(`✅ ${candidate?.name || 'Candidate'} removed from demand`);
     setTimeout(() => setSuccessMessage(""), 2000);
@@ -1481,7 +1481,7 @@ const handleRemoveCandidate = async (candidateId, e) => {
 
     try {
       setSkillsLoading(true);
-      const response = await axios.delete(`http://myuandwe-bg.vercel.app/api/skills/${encodeURIComponent(skillName)}`);
+      const response = await axios.delete(`https://myuandwe-bg.vercel.app/api/skills/${encodeURIComponent(skillName)}`);
 
       if (response.data.success) {
         await fetchSkillsData();
@@ -1592,7 +1592,7 @@ const handleRemoveCandidate = async (candidateId, e) => {
         formData.append('resume', newProfile.resumePdf);
       }
       
-      const response = await axios.post('http://myuandwe-bg.vercel.app/api/candidates', formData, {
+      const response = await axios.post('https://myuandwe-bg.vercel.app/api/candidates', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -1859,7 +1859,7 @@ const handleRemoveCandidate = async (candidateId, e) => {
       
       console.log("Query params:", params.toString());
       
-      const response = await axios.get(`http://myuandwe-bg.vercel.app/api/shortcandidates/filter?${params.toString()}`);
+      const response = await axios.get(`https://myuandwe-bg.vercel.app/api/shortcandidates/filter?${params.toString()}`);
       
       if (response.data.success) {
         const processedCandidates = response.data.data
@@ -1994,7 +1994,7 @@ useEffect(() => {
     const demandId = searchParams.get('demandId');
     if (demandId && candidates.length > 0) {
       try {
-        const response = await axios.get(`http://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`);
+        const response = await axios.get(`https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`);
         if (response.data.success) {
           // Filter to only include candidates that exist in the current candidates list
           const existingCandidates = response.data.data.filter(saved => 
@@ -2942,7 +2942,7 @@ useEffect(() => {
                     {selectedCandidate.resumePath && (
                       <button
                         onClick={() => {
-                          setSelectedResumeUrl(`http://myuandwe-bg.vercel.app${selectedCandidate.resumePath}`);
+                          setSelectedResumeUrl(`https://myuandwe-bg.vercel.app${selectedCandidate.resumePath}`);
                           setShowResumeModal(true);
                         }}
                         className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
