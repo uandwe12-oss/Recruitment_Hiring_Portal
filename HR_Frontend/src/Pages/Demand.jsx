@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import Header from "../Components/Header"
+import Header from "../components/Header"
 import bgImage from "../assets/Images/back.png";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
