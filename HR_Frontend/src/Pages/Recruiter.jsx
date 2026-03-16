@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import Header from "../Components/Header";
+import Header from "../components/Header";
 import { useLocation } from "react-router-dom";
 import bgImage from "../assets/Images/back.png";
 import { useSearchParams } from "react-router-dom";
