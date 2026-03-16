@@ -73,7 +73,7 @@ const Demand = () => {
 
   const fetchDemands = async () => {
     try {
-      const response = await fetch("http://myuandwe-bg.vercel.app/api/demand");
+      const response = await fetch("https://myuandwe-bg.vercel.app/api/demand");
       if (!response.ok) throw new Error("Failed to fetch demands");
       const data = await response.json();
       setDemands(data);
@@ -88,7 +88,7 @@ const Demand = () => {
   // Function to fetch selected candidates for a specific demand
   const fetchSelectedCandidates = async (demandId) => {
     try {
-      const response = await axios.get(`http://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`);
+      const response = await axios.get(`https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`);
       
       if (response.data.success) {
         console.log(`✅ Fetched ${response.data.data.length} selected candidates for demand ${demandId}`);
@@ -126,7 +126,7 @@ const handleCandidateAction = async (candidateId, action) => {
   try {
     setLoadingSelected(true);
     
-    const response = await axios.put(`http://myuandwe-bg.vercel.app/api/selected-candidates/status`, {
+    const response = await axios.put(`https://myuandwe-bg.vercel.app/api/selected-candidates/status`, {
       candidateId: candidateId,
       demandId: selectedDemandId,
       status: action
@@ -264,7 +264,7 @@ const handleCandidateAction = async (candidateId, action) => {
 
       console.log("📝 Sending demand data to backend:", demandToCreate);
 
-      const response = await fetch("http://myuandwe-bg.vercel.app/api/demand", {
+      const response = await fetch("https://myuandwe-bg.vercel.app/api/demand", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -312,7 +312,7 @@ const handleCandidateAction = async (candidateId, action) => {
     }
 
     try {
-      const response = await fetch(`http://myuandwe-bg.vercel.app/api/demand/${demandId}`, {
+      const response = await fetch(`https://myuandwe-bg.vercel.app/api/demand/${demandId}`, {
         method: "DELETE",
       });
 
@@ -545,7 +545,7 @@ const handleCandidateAction = async (candidateId, action) => {
       console.log("📝 Sending updated demand to backend:", JSON.stringify(updatedDemand, null, 2));
 
       const response = await fetch(
-        `http://myuandwe-bg.vercel.app/api/demand/${editedDemand.id}`,
+        `https://myuandwe-bg.vercel.app/api/demand/${editedDemand.id}`,
         {
           method: "PUT",
           headers: {
@@ -1494,7 +1494,7 @@ const handleCandidateAction = async (candidateId, action) => {
   <FileText size={14} className="text-gray-500" />
   {candidate.resumePath || candidate.googleDriveViewLink ? (
     <a 
-      href={candidate.googleDriveViewLink || `http://myuandwe-bg.vercel.app${candidate.resumePath}`}
+      href={candidate.googleDriveViewLink || `https://myuandwe-bg.vercel.app${candidate.resumePath}`}
       target="_blank" 
       rel="noopener noreferrer"
       className="text-blue-600 hover:underline"
