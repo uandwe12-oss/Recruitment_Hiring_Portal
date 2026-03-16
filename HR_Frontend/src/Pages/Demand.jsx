@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import Header from "../components/Header"
+import Header from "../Components/Header"
 import bgImage from "../assets/Images/back.png";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import axios from "axios"; // Add axios import
 
 import {
   X,
@@ -19,7 +20,14 @@ import {
   GraduationCap,
   UserCheck,
   Save,
-  Trash2
+  Trash2,
+  MessageCircle,
+  Users,
+  Eye,
+  Mail,
+  Phone,
+  FileText,
+  Loader
 } from "lucide-react";
 
 const Demand = () => {
@@ -35,12 +43,23 @@ const Demand = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [userRole, setUserRole] = useState(null);
+  const [statusChangeDesc, setStatusChangeDesc] = useState("");
+  const [showStatusDesc, setShowStatusDesc] = useState(false);
+  const [previousStatus, setPreviousStatus] = useState("");
   
+  // Selected Candidates States
+  const [selectedCandidates, setSelectedCandidates] = useState({});
+  const [showSelectedModal, setShowSelectedModal] = useState(false);
+  const [currentSelectedCandidates, setCurrentSelectedCandidates] = useState([]);
+  const [selectedDemandId, setSelectedDemandId] = useState(null);
+  const [loadingSelected, setLoadingSelected] = useState(false);
+  const [selectedDemandDetails, setSelectedDemandDetails] = useState(null);
+
   const formDemand = isAdding
     ? newDemand
     : isEditing
-    ? editedDemand
-    : selectedDemand;
+      ? editedDemand
+      : selectedDemand;
 
   const navigate = useNavigate();
 
@@ -54,25 +73,109 @@ const Demand = () => {
 
   const fetchDemands = async () => {
     try {
-      const response = await fetch("https://myuandwe-bg.vercel.app/api/demand");
+      const response = await fetch("http://myuandwe-bg.vercel.app/api/demand");
       if (!response.ok) throw new Error("Failed to fetch demands");
       const data = await response.json();
       setDemands(data);
+      
+      // After fetching demands, load selected candidates for each demand
+      await loadAllSelectedCandidates(data);
     } catch (err) {
       console.error("❌ Error fetching demands:", err);
     }
   };
 
+  // Function to fetch selected candidates for a specific demand
+  const fetchSelectedCandidates = async (demandId) => {
+    try {
+      const response = await axios.get(`http://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`);
+      
+      if (response.data.success) {
+        console.log(`✅ Fetched ${response.data.data.length} selected candidates for demand ${demandId}`);
+        return response.data.data;
+      }
+      return [];
+    } catch (err) {
+      console.error(`❌ Error fetching selected candidates for demand ${demandId}:`, err);
+      return [];
+    }
+  };
+
+  // Function to load selected candidates for all demands
+  const loadAllSelectedCandidates = async (demandsList) => {
+    try {
+      const selections = {};
+      
+      // Fetch selected candidates for each demand in parallel
+      await Promise.all(
+        demandsList.map(async (demand) => {
+          const candidates = await fetchSelectedCandidates(demand.id);
+          selections[demand.id] = candidates;
+        })
+      );
+      
+      setSelectedCandidates(selections);
+    } catch (err) {
+      console.error("❌ Error loading all selected candidates:", err);
+    }
+  };
+
+
+// Function to handle candidate selection/rejection in the Demand popup
+const handleCandidateAction = async (candidateId, action) => {
+  try {
+    setLoadingSelected(true);
+    
+    const response = await axios.put(`http://myuandwe-bg.vercel.app/api/selected-candidates/status`, {
+      candidateId: candidateId,
+      demandId: selectedDemandId,
+      status: action
+    });
+
+    if (response.data.success) {
+      // Refresh the selected candidates list
+      const updatedCandidates = await fetchSelectedCandidates(selectedDemandId);
+      setCurrentSelectedCandidates(updatedCandidates);
+      
+      // Also update the main selectedCandidates state
+      setSelectedCandidates(prev => ({
+        ...prev,
+        [selectedDemandId]: updatedCandidates
+      }));
+      
+      // Show success message
+      alert(`Candidate marked as ${action}!`);
+    }
+  } catch (err) {
+    console.error(`Error updating candidate status:`, err);
+    alert('Failed to update candidate status');
+  } finally {
+    setLoadingSelected(false);
+  }
+};
+  // Function to view selected candidates for a demand
+  const handleViewSelectedCandidates = async (demand) => {
+    setSelectedDemandId(demand.id);
+    setSelectedDemandDetails(demand);
+    setCurrentSelectedCandidates([]);
+    setShowSelectedModal(true);
+    setLoadingSelected(true);
+    
+    // Fetch selected candidates
+    const candidates = await fetchSelectedCandidates(demand.id);
+    setCurrentSelectedCandidates(candidates);
+    setLoadingSelected(false);
+  };
+
   const handleExport = () => {
     if (!demands.length) {
-      alert("No data to export");
       return;
     }
 
     // Prepare data with separate columns for each field
     const exportData = demands.map((d, index) => {
       const ageingWeeks = d.ageingWeeks ?? calculateAgeing(d.createdDate);
-      
+
       return {
         "S.No": index + 1,
         "RR No": d.rrNumber || `RR${String(d.id).padStart(3, "0")}`,
@@ -89,13 +192,14 @@ const Demand = () => {
         "Recruiter": d.recruiterPOC || "",
         "Primary Skills": (d.primarySkill || []).join(", "),
         "Secondary Skills": (d.secondarySkill || []).join(", "),
-        "Job Description": d.jobDescription || ""
+        "Job Description": d.jobDescription || "",
+        "Selected Candidates": selectedCandidates[d.id]?.length || 0
       };
     });
 
     // Create worksheet with the data
     const worksheet = XLSX.utils.json_to_sheet(exportData);
-    
+
     // Set column widths for better readability
     const columnWidths = [
       { wch: 5 },    // S.No
@@ -113,9 +217,10 @@ const Demand = () => {
       { wch: 15 },   // Recruiter
       { wch: 30 },   // Primary Skills
       { wch: 30 },   // Secondary Skills
-      { wch: 50 }    // Job Description
+      { wch: 50 },   // Job Description
+      { wch: 15 }    // Selected Candidates
     ];
-    
+
     worksheet['!cols'] = columnWidths;
 
     // Create workbook and add worksheet
@@ -159,9 +264,9 @@ const Demand = () => {
 
       console.log("📝 Sending demand data to backend:", demandToCreate);
 
-      const response = await fetch("https://myuandwe-bg.vercel.app/api/demand", {
+      const response = await fetch("http://myuandwe-bg.vercel.app/api/demand", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "Accept": "application/json"
         },
@@ -169,10 +274,10 @@ const Demand = () => {
       });
 
       console.log("📡 Response status:", response.status);
-      
+
       const responseText = await response.text();
       console.log("📡 Response body:", responseText);
-      
+
       if (!response.ok) {
         let errorMessage = `Server error: ${response.status}`;
         try {
@@ -193,13 +298,9 @@ const Demand = () => {
       // Close the popup
       setIsAdding(false);
       setNewDemand(null);
-      
-      // Optionally show success message
-      alert("Demand created successfully!");
 
     } catch (err) {
       console.error("❌ Create error details:", err);
-      alert(`Failed to create demand: ${err.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -211,7 +312,7 @@ const Demand = () => {
     }
 
     try {
-      const response = await fetch(`https://myuandwe-bg.vercel.app/api/demand/${demandId}`, {
+      const response = await fetch(`http://myuandwe-bg.vercel.app/api/demand/${demandId}`, {
         method: "DELETE",
       });
 
@@ -222,16 +323,14 @@ const Demand = () => {
 
       // Refresh the demands list
       await fetchDemands();
-      
+
       // Close the popup if the deleted demand was selected
       if (selectedDemand?.id === demandId) {
         setSelectedDemand(null);
       }
 
-      alert("Demand deleted successfully!");
     } catch (err) {
       console.error("❌ Error deleting demand:", err);
-      alert(`Failed to delete demand: ${err.message}`);
     }
   };
 
@@ -253,40 +352,49 @@ const Demand = () => {
     return Math.max(0, Math.floor(diffDays / 7));
   };
 
-// First filter by status based on selection
-const statusFilteredDemands = demands.filter((d) => {
-  if (sortBy === "active") {
-    return d.status === "Active"; // Show only Active
-  }
-  if (sortBy === "inactive") {
-    return d.status === "Inactive"; // Show only Inactive
-  }
-  return true; // For priority sort, show all
-});
+  // First filter by status based on selection
+  const statusFilteredDemands = demands.filter((d) => {
+    if (sortBy === "active") {
+      return d.status === "Active";
+    }
+    if (sortBy === "fulfilled") {
+      return d.status === "Fulfilled";
+    }
+    if (sortBy === "closed") {
+      return d.status === "Closed";
+    }
+    if (sortBy === "cancelled") {
+      return d.status === "Cancelled";
+    }
+    if (sortBy === "all") {
+      return true; // Show all statuses
+    }
+    return true; // For priority/date sort, show all
+  });
 
-// Then apply search filter
-const filteredDemands = statusFilteredDemands.filter((d) =>
-  `${d.clientName || ""} ${d.location || ""} ${(d.primarySkill || []).join(
-    " "
-  )} ${(d.secondarySkill || []).join(" ")}`
-    .toLowerCase()
-    .includes(searchTerm.toLowerCase())
-);
+  // Then apply search filter
+  const filteredDemands = statusFilteredDemands.filter((d) =>
+    `${d.clientName || ""} ${d.location || ""} ${(d.primarySkill || []).join(
+      " "
+    )} ${(d.secondarySkill || []).join(" ")}`
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase())
+  );
 
-const sortedDemands = [...filteredDemands].sort((a, b) => {
-  if (sortBy === "priority") {
-    // Priority order: High > Medium > Low
-    const priorityOrder = { "High": 1, "Medium": 2, "Low": 3 };
-    const aPriority = priorityOrder[a.jobPriority] || 4;
-    const bPriority = priorityOrder[b.jobPriority] || 4;
-    return aPriority - bPriority;
-  }
-  if (sortBy === "date") {
-    return new Date(b.createdDate || 0) - new Date(a.createdDate || 0);
-  }
-  // For active/inactive views, sort by RR No/id
-  return a.id - b.id;
-});
+  const sortedDemands = [...filteredDemands].sort((a, b) => {
+    if (sortBy === "priority") {
+      // Priority order: High > Medium > Low
+      const priorityOrder = { "High": 1, "Medium": 2, "Low": 3 };
+      const aPriority = priorityOrder[a.jobPriority] || 4;
+      const bPriority = priorityOrder[b.jobPriority] || 4;
+      return aPriority - bPriority;
+    }
+    if (sortBy === "date") {
+      return new Date(b.createdDate || 0) - new Date(a.createdDate || 0);
+    }
+    // For active/inactive views, sort by RR No/id
+    return a.id - b.id;
+  });
 
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -308,8 +416,45 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
   };
 
   const handleEditDemand = (demand) => {
+    // Make sure we have the latest demand data
+    const demandToEdit = demands.find(d => d.id === demand.id) || demand;
+    
     setIsEditing(true);
-    setEditedDemand({ ...demand });
+    setEditedDemand({ ...demandToEdit });
+    
+    // Load the latest reason from statusHistory if it exists
+    if (demandToEdit.statusHistory) {
+      let historyArray = demandToEdit.statusHistory;
+      if (typeof historyArray === 'string') {
+        try {
+          historyArray = JSON.parse(historyArray);
+        } catch (e) {
+          historyArray = [];
+        }
+      }
+      
+      if (Array.isArray(historyArray) && historyArray.length > 0) {
+        const latestHistory = historyArray[historyArray.length - 1];
+        // Only show reason if it's not a default message
+        if (latestHistory.reason && 
+            latestHistory.reason !== `Status changed from ${latestHistory.fromStatus} to ${latestHistory.toStatus}` && 
+            !latestHistory.reason.includes('Status changed from')) {
+          setStatusChangeDesc(latestHistory.reason);
+          setShowStatusDesc(true);
+        } else {
+          setStatusChangeDesc("");
+          setShowStatusDesc(false);
+        }
+      } else {
+        setStatusChangeDesc("");
+        setShowStatusDesc(false);
+      }
+    } else {
+      setStatusChangeDesc("");
+      setShowStatusDesc(false);
+    }
+    
+    setPreviousStatus(demandToEdit.status || "Active");
   };
 
   const handleSaveDemand = async () => {
@@ -319,38 +464,129 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
       return;
     }
 
+    // Check if status is being changed and no description provided
+    if (!isAdding && editedDemand?.status !== previousStatus) {
+      if (!statusChangeDesc.trim()) {
+        return;
+      }
+    }
+
     // Otherwise, it's an edit
     if (!editedDemand?.id) return;
 
     try {
       setIsSaving(true);
 
+      // Create the updated demand object - exclude temporary fields
+      const { statusChangeReason, statusChangedBy, statusChangedDate, ...restDemand } = editedDemand;
+      const updatedDemand = { ...restDemand };
+
+      // Check if status has changed OR reason has been updated
+      const statusChanged = previousStatus && previousStatus !== editedDemand.status;
+      const reasonChanged = statusChangeDesc !== "" && statusChangeDesc !== (() => {
+        // Get the current reason from statusHistory if it exists
+        if (updatedDemand.statusHistory) {
+          let historyArray = updatedDemand.statusHistory;
+          if (typeof historyArray === 'string') {
+            try {
+              historyArray = JSON.parse(historyArray);
+            } catch (e) {
+              historyArray = [];
+            }
+          }
+          if (Array.isArray(historyArray) && historyArray.length > 0) {
+            return historyArray[historyArray.length - 1].reason || "";
+          }
+        }
+        return "";
+      })();
+      
+      if (statusChanged || reasonChanged) {
+        // Parse existing statusHistory if it exists
+        let existingHistory = [];
+        if (updatedDemand.statusHistory) {
+          if (typeof updatedDemand.statusHistory === 'string') {
+            try {
+              existingHistory = JSON.parse(updatedDemand.statusHistory);
+            } catch (e) {
+              existingHistory = [];
+            }
+          } else if (Array.isArray(updatedDemand.statusHistory)) {
+            existingHistory = [...updatedDemand.statusHistory];
+          }
+        }
+
+        if (statusChanged) {
+          // Status changed - create new history entry
+          const user = JSON.parse(localStorage.getItem("user")) || { name: "Unknown" };
+          const statusHistoryEntry = {
+            fromStatus: previousStatus,
+            toStatus: editedDemand.status,
+            reason: statusChangeDesc || `Status changed from ${previousStatus} to ${editedDemand.status}`,
+            changedBy: user.name || "Unknown",
+            changedDate: new Date().toISOString()
+          };
+          
+          // Add the new entry to history
+          existingHistory.push(statusHistoryEntry);
+        } else if (reasonChanged && existingHistory.length > 0) {
+          // Status didn't change but reason was updated - update the latest history entry
+          existingHistory[existingHistory.length - 1] = {
+            ...existingHistory[existingHistory.length - 1],
+            reason: statusChangeDesc,
+            changedDate: new Date().toISOString()
+          };
+        }
+        
+        // CRITICAL: Stringify the entire history array for Neo4j
+        updatedDemand.statusHistory = JSON.stringify(existingHistory);
+      }
+
+      console.log("📝 Sending updated demand to backend:", JSON.stringify(updatedDemand, null, 2));
+
       const response = await fetch(
-        `https://myuandwe-bg.vercel.app/api/demand/${editedDemand.id}`,
+        `http://myuandwe-bg.vercel.app/api/demand/${editedDemand.id}`,
         {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(editedDemand),
+          body: JSON.stringify(updatedDemand),
         }
       );
 
+      const responseText = await response.text();
+      console.log("📡 Response from server:", responseText);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to update demand");
+        let errorMessage = `Server error: ${response.status}`;
+        try {
+          const errorData = JSON.parse(responseText);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = responseText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
+      const result = JSON.parse(responseText);
+      console.log("✅ Update successful:", result);
+
+      // Refresh the demands list
       await fetchDemands();
 
-      setSelectedDemand(editedDemand);
+      // Reset all edit-related states
       setIsEditing(false);
       setEditedDemand(null);
+      setShowStatusDesc(false);
+      setStatusChangeDesc("");
+      setPreviousStatus("");
 
-      console.log("✅ Demand updated successfully");
+      // Close the popup
+      setSelectedDemand(null);
+
     } catch (err) {
       console.error("❌ Error updating demand:", err);
-      alert(`Failed to update demand: ${err.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -361,9 +597,10 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
     setIsAdding(false);
     setEditedDemand(null);
     setNewDemand(null);
-    if (!selectedDemand) {
-      setSelectedDemand(null);
-    }
+    setShowStatusDesc(false);
+    setStatusChangeDesc("");
+    setPreviousStatus("");
+    // Don't set selectedDemand to null here - keep it open in view mode
   };
 
   const handleInputChange = (field, value) => {
@@ -377,6 +614,15 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
         ...prev,
         [field]: value
       }));
+      
+      // Show reason input when status changes to non-Active
+      if (field === "status" && value !== "Active" && value !== previousStatus) {
+        setShowStatusDesc(true);
+        // Don't clear existing reason when changing status
+      } else if (field === "status" && value === "Active") {
+        setShowStatusDesc(false);
+        setStatusChangeDesc("");
+      }
     }
   };
 
@@ -424,13 +670,53 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
 
   const handleViewCandidates = (demand) => {
     if (!demand || !demand.id) {
-      alert("Cannot view candidates for a demand that hasn't been saved yet.");
       return;
     }
-    navigate(`/recruiter/candidates/${demand.id}`);
+    
+    // Get current user from localStorage
+    const user = JSON.parse(localStorage.getItem("user"));
+    
+    // Create a query string with the demand's requirements
+    const queryParams = new URLSearchParams();
+    
+    // Add primary skills
+    if (demand.primarySkill && demand.primarySkill.length > 0) {
+      queryParams.append('primarySkills', demand.primarySkill.join(','));
+    }
+    
+    // Add secondary skills
+    if (demand.secondarySkill && demand.secondarySkill.length > 0) {
+      queryParams.append('secondarySkills', demand.secondarySkill.join(','));
+    }
+    
+    // Add experience range
+    if (demand.expFrom) {
+      queryParams.append('minExperience', demand.expFrom);
+    }
+    if (demand.expTo) {
+      queryParams.append('maxExperience', demand.expTo);
+    }
+    
+    // Add a flag to indicate we want to auto-apply filters
+    queryParams.append('autoFilter', 'true');
+    
+    // Add demand ID
+    queryParams.append('demandId', demand.id);
+    
+    // Add user info to maintain session (optional, but good for debugging)
+    if (user) {
+      queryParams.append('userId', user.id);
+      queryParams.append('userRole', user.role);
+    }
+    
+    console.log("Navigating to recruiter with params:", queryParams.toString());
+    
+    // Navigate to recruiter page with query parameters
+    navigate(`/recruiter?${queryParams.toString()}`);
   };
 
   const handleAddButtonClick = () => {
+    const user = JSON.parse(localStorage.getItem("user"));
     setIsAdding(true);
     setSelectedDemand(null);
     setIsEditing(false);
@@ -449,6 +735,7 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
       secondarySkill: [""],
       recruiterPOC: "",
       status: "Active",
+      createdBy: user?.name || "Unknown"
     });
   };
 
@@ -469,51 +756,54 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
             </div>
 
             <div className="flex gap-3 items-center">
-  {/* Show ADD button only for Admin */}
-  {userRole === "Admin" && (
-    <button
-      onClick={handleAddButtonClick}
-      className="px-6 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition"
-    >
-      ADD
-    </button>
-  )}
-  
-  {/* Show Export button only for Admin */}
-  {userRole === "Admin" && (
-    <button
-      onClick={handleExport}
-      className="px-6 py-2 bg-green-600 text-white rounded-xl shadow hover:bg-green-700 transition"
-    >
-      Export
-    </button>
-  )}
-  
-  <input
-    type="text"
-    placeholder="Search..."
-    value={searchTerm}
-    onChange={(e) => setSearchTerm(e.target.value)}
-    className="px-4 py-2 border-2 border-blue-500 rounded-xl w-56 
-             focus:border-blue-600 focus:ring-2 focus:ring-blue-200 
-             outline-none"
-  />
+              {/* Show ADD button only for Admin */}
+              {userRole === "Admin" && (
+                <button
+                  onClick={handleAddButtonClick}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition"
+                >
+                  ADD
+                </button>
+              )}
 
-  <select
-    value={sortBy}
-    onChange={(e) => setSortBy(e.target.value)}
-    className="px-3 py-2 rounded-lg bg-gray-50 text-gray-700
-             border border-gray-300
-             hover:bg-gray-100 cursor-pointer
-             focus:ring-2 focus:ring-gray-300 outline-none"
-  >
-    <option value="active">Show: Active Only</option>
-    <option value="inactive">Show: Inactive Only</option>
-    <option value="priority">Sort: Priority (High to Low)</option>
-    <option value="date">Sort: Date</option>
-  </select>
-</div>
-</div>
+              {/* Show Export button only for Admin */}
+              {userRole === "Admin" && (
+                <button
+                  onClick={handleExport}
+                  className="px-6 py-2 bg-green-600 text-white rounded-xl shadow hover:bg-green-700 transition"
+                >
+                  Export
+                </button>
+              )}
+
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="px-4 py-2 border-2 border-blue-500 rounded-xl w-56 
+            focus:border-blue-600 focus:ring-2 focus:ring-blue-200 
+            outline-none"
+              />
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-gray-50 text-gray-700
+                  border border-gray-300
+                  hover:bg-gray-100 cursor-pointer
+                  focus:ring-2 focus:ring-gray-300 outline-none"
+              >
+                <option value="active">Show: Active Only</option>
+                <option value="fulfilled">Show: Fulfilled Only</option>
+                <option value="closed">Show: Closed Only</option>
+                <option value="cancelled">Show: Cancelled Only</option>
+                <option value="all">Show: All Status</option>
+                <option value="priority">Sort: Priority (High to Low)</option>
+                <option value="date">Sort: Date (Newest First)</option>
+              </select>
+            </div>
+          </div>
 
           {/* TABLE */}
           <div className="bg-white rounded-2xl shadow-xl p-4 overflow-x-auto">
@@ -529,6 +819,7 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                   <th className="px-4 py-3">Experience</th>
                   <th className="px-4 py-3">Priority</th>
                   <th className="px-4 py-3">Recruiter</th>
+                 
                 </tr>
               </thead>
 
@@ -559,11 +850,26 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                     </td>
                     <td className="px-4 py-3">{d.jobPriority}</td>
                     <td className="px-4 py-3">{d.recruiterPOC}</td>
+                    {/* <td className="px-4 py-3">
+                      <button
+                        onClick={() => handleViewSelectedCandidates(d)}
+                        className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
+                        title="View Selected Candidates"
+                      >
+                        <Users size={14} />
+                        <span className="text-xs">View</span>
+                        {selectedCandidates[d.id]?.length > 0 && (
+                          <span className="ml-1 bg-green-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                            {selectedCandidates[d.id].length}
+                          </span>
+                        )}
+                      </button>
+                    </td> */}
                   </tr>
                 ))}
               </tbody>
             </table>
-            
+
             {/* No Data Found Message */}
             {sortedDemands.length === 0 && (
               <div className="text-center py-8">
@@ -574,7 +880,7 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                   No demands found
                 </h3>
                 <p className="text-gray-500">
-                  {searchTerm 
+                  {searchTerm
                     ? `No results found for "${searchTerm}". Try a different search term.`
                     : "No demand data available."}
                 </p>
@@ -588,20 +894,19 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
               <div className="text-sm text-gray-600">
                 Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, sortedDemands.length)} of {sortedDemands.length} entries
               </div>
-              
+
               <div className="flex gap-2">
                 <button
                   onClick={prevPage}
                   disabled={currentPage === 1}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
-                    currentPage === 1
+                  className={`px-4 py-2 rounded-lg transition-colors ${currentPage === 1
                       ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                       : "bg-blue-500 text-white hover:bg-blue-600"
-                  }`}
+                    }`}
                 >
                   Previous
                 </button>
-                
+
                 {/* Page Numbers */}
                 <div className="flex gap-1">
                   {[...Array(totalPages)].map((_, index) => {
@@ -616,11 +921,10 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                         <button
                           key={pageNumber}
                           onClick={() => paginate(pageNumber)}
-                          className={`w-10 h-10 rounded-lg transition-colors ${
-                            currentPage === pageNumber
+                          className={`w-10 h-10 rounded-lg transition-colors ${currentPage === pageNumber
                               ? "bg-blue-600 text-white"
                               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                          }`}
+                            }`}
                         >
                           {pageNumber}
                         </button>
@@ -633,15 +937,14 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                     return null;
                   })}
                 </div>
-                
+
                 <button
                   onClick={nextPage}
                   disabled={currentPage === totalPages}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
-                    currentPage === totalPages
+                  className={`px-4 py-2 rounded-lg transition-colors ${currentPage === totalPages
                       ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                       : "bg-blue-500 text-white hover:bg-blue-600"
-                  }`}
+                    }`}
                 >
                   Next
                 </button>
@@ -655,7 +958,7 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
             {/* Main popup container with fixed max height */}
             <div className="bg-white w-[92%] max-w-4xl rounded-3xl shadow-2xl relative flex flex-col max-h-[90vh]">
-              
+
               {/* Fixed Header - outside scroll area */}
               <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-100">
                 <h3 className="text-2xl font-bold">
@@ -726,7 +1029,7 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                           Edit
                         </button>
                       )}
-                      
+
                       {/* Show Delete button only for Admin */}
                       {userRole === "Admin" && (
                         <button
@@ -738,7 +1041,7 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                           Delete
                         </button>
                       )}
-                      
+
                       <button
                         onClick={() => setSelectedDemand(null)}
                         className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
@@ -863,23 +1166,33 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                     )}
                   </div>
 
+                  {/* Status - Simple row */}
                   <div className="flex items-center gap-2">
-  <CheckCircle size={16} /> <b>Status:</b>
-  {(isEditing || isAdding) ? (
-    <select
-      value={isAdding ? newDemand?.status || "Active" : editedDemand?.status || ""}
-      onChange={(e) => handleInputChange("status", e.target.value)}
-      className="ml-2 px-2 py-1 border rounded"
-    >
-      <option value="Active">Active</option>
-      <option value="Inactive">Inactive</option>
-    </select>
-  ) : (
-    <span className="ml-2">{formDemand?.status}</span>
-  )}
-</div>
+                    <CheckCircle size={16} /> <b>Status:</b>
+                    {(isEditing || isAdding) ? (
+                      <select
+                        value={isAdding ? newDemand?.status || "Active" : editedDemand?.status || "Active"}
+                        onChange={(e) => {
+                          const newStatus = e.target.value;
+                          handleInputChange("status", newStatus);
+                        }}
+                        className="ml-2 px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-44"
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Fulfilled">Fulfilled</option>
+                        <option value="Closed">Closed</option>
+                        <option value="Cancelled">Cancelled</option>
+                      </select>
+                    ) : (
+                      <span className="ml-2 font-bold px-3 py-1.5 bg-gray-100 text-gray-800 rounded-lg shadow-sm">
+                        {formDemand?.status || "Active"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Interviewer 1 */}
                   <div className="flex items-center gap-2">
-                    <User size={16} /> <b>Interviewer 1:</b>
+                    <User size={16} /> <b>UANDWE Interviewer:</b>
                     {(isEditing || isAdding) ? (
                       <input
                         type="text"
@@ -893,8 +1206,43 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                     )}
                   </div>
 
+                  {/* Reason */}
                   <div className="flex items-center gap-2">
-                    <User size={16} /> <b>Interviewer 2:</b>
+                    <MessageCircle size={16} />
+                    <b>Reason:</b>
+                    {(isEditing) ? (
+                      <input
+                        type="text"
+                        value={statusChangeDesc}
+                        onChange={(e) => setStatusChangeDesc(e.target.value)}
+                        className="ml-2 px-2 py-1 border rounded w-full"
+                        placeholder="Enter reason"
+                      />
+                    ) : (
+                      <span className="ml-2">
+                        {(() => {
+                          let historyArray = formDemand?.statusHistory;
+
+                          if (typeof historyArray === "string") {
+                            try {
+                              historyArray = JSON.parse(historyArray);
+                            } catch {
+                              historyArray = [];
+                            }
+                          }
+
+                          if (!Array.isArray(historyArray) || historyArray.length === 0) return "";
+
+                          const latestHistory = historyArray[historyArray.length - 1];
+                          return latestHistory.reason || "";
+                        })()}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Interviewer 2 */}
+                  <div className="flex items-center gap-2">
+                    <User size={16} /> <b> Client Interviewer:</b>
                     {(isEditing || isAdding) ? (
                       <input
                         type="text"
@@ -908,6 +1256,7 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                     )}
                   </div>
 
+                  {/* Recruiter */}
                   <div className="flex items-center gap-2">
                     <UserCheck size={16} />
                     <b>Recruiter:</b>
@@ -1022,7 +1371,7 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                         style={{ whiteSpace: 'pre-wrap' }}
                       />
                     ) : (
-                      <div 
+                      <div
                         className="p-4 border rounded-xl bg-gray-50 text-sm overflow-auto"
                         style={{ whiteSpace: 'pre-wrap' }}
                       >
@@ -1035,12 +1384,21 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
                 {/* ACTION BUTTONS */}
                 <div className="mt-6 flex justify-center gap-4 pb-2">
                   {!isAdding && formDemand?.id && (
-                    <button
-                      onClick={() => handleViewCandidates(formDemand)}
-                      className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-lg"
-                    >
-                      <Search size={18} /> View Candidates
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleViewCandidates(formDemand)}
+                        className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-lg"
+                      >
+                        <Search size={18} /> View Candidates
+                      </button>
+                      
+                      <button
+                        onClick={() => handleViewSelectedCandidates(formDemand)}
+                        className="flex items-center gap-2 px-8 py-3 bg-green-600 text-white rounded-full hover:bg-green-700 shadow-lg"
+                      >
+                        <Users size={18} /> View Selected ({selectedCandidates[formDemand.id]?.length || 0})
+                      </button>
+                    </>
                   )}
 
                   {(isEditing || isAdding) && (
@@ -1056,6 +1414,155 @@ const sortedDemands = [...filteredDemands].sort((a, b) => {
             </div> {/* Closes Main popup container */}
           </div> /* Closes POPUP wrapper div */
         )}
+
+   {/* Selected Candidates Modal */}
+{showSelectedModal && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+      <div className="p-6 border-b flex justify-between items-center">
+        <div>
+          <h3 className="text-2xl font-bold">Selected Candidates</h3>
+          <p className="text-gray-500 text-sm">
+            Demand: {selectedDemandDetails?.rrNumber || `RR${String(selectedDemandId).padStart(3, "0")}`} • 
+            {selectedDemandDetails?.clientName && ` ${selectedDemandDetails.clientName} • `}
+            {currentSelectedCandidates.length} candidates selected
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setShowSelectedModal(false);
+            setCurrentSelectedCandidates([]);
+            setSelectedDemandId(null);
+            setSelectedDemandDetails(null);
+          }}
+          className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition"
+        >
+          <X size={24} />
+        </button>
+      </div>
+
+      <div className="p-6 overflow-y-auto max-h-[calc(80vh-120px)]">
+        {loadingSelected ? (
+          <div className="flex justify-center py-12">
+            <Loader className="w-8 h-8 animate-spin text-blue-600" />
+          </div>
+        ) : currentSelectedCandidates.length === 0 ? (
+          <div className="text-center py-12">
+            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">
+              No candidates selected yet
+            </h3>
+            <p className="text-gray-500">
+              Click "View Candidates" to find and select candidates for this demand
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {currentSelectedCandidates.map((candidate) => (
+              <div
+                key={candidate.id || candidate.canId}
+                className="border rounded-xl p-4 hover:shadow-lg transition-shadow"
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h4 className="font-bold text-lg">{candidate.name}</h4>
+                    <p className="text-gray-600 text-sm">{candidate.currentOrg || 'N/A'}</p>
+                  </div>
+                <span className={`px-2 py-1 text-xs rounded-full ${
+  candidate.status === 'Selected' ? 'bg-green-100 text-green-700' : 
+  candidate.status === 'Rejected' ? 'bg-red-100 text-red-700' : 
+  'bg-yellow-100 text-yellow-700'
+}`}>
+  {candidate.status || 'Pending'}
+</span>
+                </div>
+
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Mail size={14} className="text-gray-500" />
+                    <span className="truncate">{candidate.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone size={14} className="text-gray-500" />
+                    <span>{candidate.mobile}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Briefcase size={14} className="text-gray-500" />
+                    <span>Exp: {candidate.experience} years</span>
+                  </div>
+                 <div className="flex items-center gap-2 text-sm">
+  <FileText size={14} className="text-gray-500" />
+  {candidate.resumePath || candidate.googleDriveViewLink ? (
+    <a 
+      href={candidate.googleDriveViewLink || `http://myuandwe-bg.vercel.app${candidate.resumePath}`}
+      target="_blank" 
+      rel="noopener noreferrer"
+      className="text-blue-600 hover:underline"
+    >
+      View Resume
+    </a>
+  ) : (
+    <span className="text-gray-400">No Resume</span>
+  )}
+</div>
+                </div>
+
+                <div className="mb-4">
+                  <p className="text-sm font-medium mb-2">Key Skills:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {(candidate.keySkills || []).slice(0, 3).map((skill, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-700"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                    {(candidate.keySkills || []).length > 3 && (
+                      <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700">
+                        +{(candidate.keySkills || []).length - 3} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 mt-4">
+                   <button
+    onClick={() => handleCandidateAction(candidate.id, 'Selected')}
+    disabled={candidate.status === 'Selected'}
+    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+      candidate.status === 'Selected'
+        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+        : 'bg-green-600 hover:bg-green-700 text-white'
+    }`}
+  >
+    {candidate.status === 'Selected' ? 'Selected ✓' : 'Select'}
+  </button>
+  <button
+    onClick={() => handleCandidateAction(candidate.id, 'Rejected')}
+    disabled={candidate.status === 'Rejected'}
+    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+      candidate.status === 'Rejected'
+        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+        : 'bg-red-600 hover:bg-red-700 text-white'
+    }`}
+  >
+    {candidate.status === 'Rejected' ? 'Rejected ✗' : 'Reject'}
+  </button>
+                </div>
+
+                <p className="text-xs text-gray-400 mt-3">
+                  Selected: {new Date(candidate.selectedAt).toLocaleDateString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
       </div> {/* Closes the bg-white/50 backdrop div */}
     </div> /* Closes the main min-h-screen div */
   );
