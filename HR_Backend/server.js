@@ -31,6 +31,7 @@ const skillsRoute = require("./api/skills");
 const skillsMatchRoute = require("./api/skillsmatch");
 const shortcandidatesRoute = require("./api/shortcandidates");
 const userRoute = require("./api/users");
+const selectedCandidatesRoutes = require('./api/selectedCandidates');
 /* ================================
 ROUTE REGISTRATION
 ================================ */
@@ -42,6 +43,7 @@ app.use("/api/skills", skillsRoute);
 app.use("/api/skillsmatch", skillsMatchRoute);
 app.use("/api/shortcandidates", shortcandidatesRoute);
 app.use("/api/users", userRoute);
+app.use('/api/selected-candidates', selectedCandidatesRoutes);
 
 /* ================================
 SWAGGER CONFIG
