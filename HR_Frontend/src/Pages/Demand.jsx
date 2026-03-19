@@ -18,16 +18,19 @@ import {
   Flag,
   Calendar,
   GraduationCap,
-  UserCheck,
+ // UserCheck,
   Save,
   Trash2,
-  MessageCircle,
+  MessageCircle,//
   Users,
   Eye,
   Mail,
   Phone,
   FileText,
-  Loader
+  Loader,
+  Clock,  // ← Add this line
+  XCircle, // ← Add this if not already present
+  UserCheck // ← Already present but good to check
 } from "lucide-react";
 
 const Demand = () => {
@@ -46,6 +49,16 @@ const Demand = () => {
   const [statusChangeDesc, setStatusChangeDesc] = useState("");
   const [showStatusDesc, setShowStatusDesc] = useState(false);
   const [previousStatus, setPreviousStatus] = useState("");
+  // Status Edit Modal States
+const [showStatusEditModal, setShowStatusEditModal] = useState(false);
+const [selectedStatusCandidate, setSelectedStatusCandidate] = useState(null);
+const [selectedNewStatus, setSelectedNewStatus] = useState('');
+const [statusReason, setStatusReason] = useState('');
+const [statusLoading, setStatusLoading] = useState(false);
+
+// History Modal States
+const [showHistoryModal, setShowHistoryModal] = useState(false);
+const [selectedHistoryCandidate, setSelectedHistoryCandidate] = useState(null);
   
   // Selected Candidates States
   const [selectedCandidates, setSelectedCandidates] = useState({});
@@ -119,17 +132,81 @@ const Demand = () => {
       console.error("❌ Error loading all selected candidates:", err);
     }
   };
+  // Open status edit modal
+const openStatusEditModal = (candidate) => {
+  setSelectedStatusCandidate(candidate);
+  setSelectedNewStatus(candidate.status);
+  setStatusReason('');
+  setShowStatusEditModal(true);
+};
 
+// View candidate history
+const viewCandidateHistory = (candidate) => {
+  setSelectedHistoryCandidate(candidate);
+  setShowHistoryModal(true);
+};
 
-// Function to handle candidate selection/rejection in the Demand popup
-const handleCandidateAction = async (candidateId, action) => {
+// Handle status update
+const handleStatusUpdate = async () => {
+  if (!selectedNewStatus || !statusReason.trim() || !selectedStatusCandidate) return;
+  
+  try {
+    setStatusLoading(true);
+    
+    const user = JSON.parse(localStorage.getItem("user")) || {};
+    const changedBy = user.name || user.username || 'Unknown';
+    
+    const response = await axios.put(`https://myuandwe-bg.vercel.app/api/selected-candidates/status`, {
+      candidateId: selectedStatusCandidate.id,
+      demandId: selectedDemandId,
+      status: selectedNewStatus,
+      reason: statusReason,
+      changedBy: changedBy
+    });
+
+    if (response.data.success) {
+      // Refresh the selected candidates list
+      const updatedCandidates = await fetchSelectedCandidates(selectedDemandId);
+      setCurrentSelectedCandidates(updatedCandidates);
+      
+      // Update main state
+      setSelectedCandidates(prev => ({
+        ...prev,
+        [selectedDemandId]: updatedCandidates
+      }));
+      
+      // Close modal
+      setShowStatusEditModal(false);
+      setSelectedStatusCandidate(null);
+      setSelectedNewStatus('');
+      setStatusReason('');
+      
+      // Show success message
+      alert('Status updated successfully!');
+    }
+  } catch (err) {
+    console.error('Error updating status:', err);
+    alert('Failed to update status');
+  } finally {
+    setStatusLoading(false);
+  }
+};
+
+// Handle candidate status change with reason
+const handleCandidateAction = async (candidateId, newStatus, reason) => {
   try {
     setLoadingSelected(true);
+    
+    // Get current user
+    const user = JSON.parse(localStorage.getItem("user")) || {};
+    const changedBy = user.name || user.username || 'Unknown';
     
     const response = await axios.put(`https://myuandwe-bg.vercel.app/api/selected-candidates/status`, {
       candidateId: candidateId,
       demandId: selectedDemandId,
-      status: action
+      status: newStatus,
+      reason: reason,
+      changedBy: changedBy
     });
 
     if (response.data.success) {
@@ -144,7 +221,7 @@ const handleCandidateAction = async (candidateId, action) => {
       }));
       
       // Show success message
-      alert(`Candidate marked as ${action}!`);
+      alert(`Candidate marked as ${newStatus}!`);
     }
   } catch (err) {
     console.error(`Error updating candidate status:`, err);
@@ -1415,7 +1492,7 @@ const handleCandidateAction = async (candidateId, action) => {
           </div> /* Closes POPUP wrapper div */
         )}
 
-   {/* Selected Candidates Modal */}
+{/* Selected Candidates Modal */}
 {showSelectedModal && (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
@@ -1434,6 +1511,8 @@ const handleCandidateAction = async (candidateId, action) => {
             setCurrentSelectedCandidates([]);
             setSelectedDemandId(null);
             setSelectedDemandDetails(null);
+            setShowHistoryModal(false);
+            setSelectedHistoryCandidate(null);
           }}
           className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition"
         >
@@ -1460,104 +1539,280 @@ const handleCandidateAction = async (candidateId, action) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {currentSelectedCandidates.map((candidate) => (
               <div
-                key={candidate.id || candidate.canId}
+                key={candidate.id}
                 className="border rounded-xl p-4 hover:shadow-lg transition-shadow"
               >
+                {/* Candidate Header */}
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h4 className="font-bold text-lg">{candidate.name}</h4>
-                    <p className="text-gray-600 text-sm">{candidate.currentOrg || 'N/A'}</p>
+                    <p className="text-xs text-gray-500">
+                      Added by: <span className="font-medium text-gray-700">{candidate.selectedBy || 'Unknown'}</span> • 
+                      {new Date(candidate.selectedAt).toLocaleDateString()}
+                    </p>
                   </div>
-                <span className={`px-2 py-1 text-xs rounded-full ${
-  candidate.status === 'Selected' ? 'bg-green-100 text-green-700' : 
-  candidate.status === 'Rejected' ? 'bg-red-100 text-red-700' : 
-  'bg-yellow-100 text-yellow-700'
-}`}>
-  {candidate.status || 'Pending'}
-</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      candidate.status === 'Selected' ? 'bg-green-100 text-green-700' : 
+                      candidate.status === 'Rejected' ? 'bg-red-100 text-red-700' : 
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {candidate.status}
+                    </span>
+                    
+                    {/* Edit Status Button */}
+                    <button
+                      onClick={() => openStatusEditModal(candidate)}
+                      className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition"
+                      title="Edit Status"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    
+                    {/* History Button */}
+                    <button
+                      onClick={() => viewCandidateHistory(candidate)}
+                      className="p-1 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-full transition"
+                      title="View History"
+                    >
+                      <Clock size={16} />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-2 mb-4">
+                {/* Resume Link */}
+                <div className="mb-3">
                   <div className="flex items-center gap-2 text-sm">
-                    <Mail size={14} className="text-gray-500" />
-                    <span className="truncate">{candidate.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone size={14} className="text-gray-500" />
-                    <span>{candidate.mobile}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Briefcase size={14} className="text-gray-500" />
-                    <span>Exp: {candidate.experience} years</span>
-                  </div>
-                 <div className="flex items-center gap-2 text-sm">
-  <FileText size={14} className="text-gray-500" />
-  {candidate.resumePath || candidate.googleDriveViewLink ? (
-    <a 
-      href={candidate.googleDriveViewLink || `https://myuandwe-bg.vercel.app${candidate.resumePath}`}
-      target="_blank" 
-      rel="noopener noreferrer"
-      className="text-blue-600 hover:underline"
-    >
-      View Resume
-    </a>
-  ) : (
-    <span className="text-gray-400">No Resume</span>
-  )}
-</div>
-                </div>
-
-                <div className="mb-4">
-                  <p className="text-sm font-medium mb-2">Key Skills:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {(candidate.keySkills || []).slice(0, 3).map((skill, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-700"
+                    <FileText size={14} className="text-gray-500" />
+                    {candidate.resumePath || candidate.googleDriveViewLink ? (
+                      <a 
+                        href={candidate.googleDriveViewLink || `https://myuandwe-bg.vercel.app${candidate.resumePath}`}
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
                       >
-                        {skill}
-                      </span>
-                    ))}
-                    {(candidate.keySkills || []).length > 3 && (
-                      <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700">
-                        +{(candidate.keySkills || []).length - 3} more
-                      </span>
+                        View Resume
+                      </a>
+                    ) : (
+                      <span className="text-gray-400">No Resume</span>
                     )}
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-2 mt-4">
-                   <button
-    onClick={() => handleCandidateAction(candidate.id, 'Selected')}
-    disabled={candidate.status === 'Selected'}
-    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-      candidate.status === 'Selected'
-        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-        : 'bg-green-600 hover:bg-green-700 text-white'
-    }`}
-  >
-    {candidate.status === 'Selected' ? 'Selected ✓' : 'Select'}
-  </button>
-  <button
-    onClick={() => handleCandidateAction(candidate.id, 'Rejected')}
-    disabled={candidate.status === 'Rejected'}
-    className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-      candidate.status === 'Rejected'
-        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-        : 'bg-red-600 hover:bg-red-700 text-white'
-    }`}
-  >
-    {candidate.status === 'Rejected' ? 'Rejected ✗' : 'Reject'}
-  </button>
-                </div>
-
-                <p className="text-xs text-gray-400 mt-3">
-                  Selected: {new Date(candidate.selectedAt).toLocaleDateString()}
-                </p>
+                {/* Show latest reason/description if available */}
+                {candidate.history && candidate.history.length > 0 && (
+                  <div className="mb-2 text-sm bg-gray-50 p-2 rounded">
+                    <span className="text-xs font-semibold text-gray-500">Latest Update:</span>
+                    <p className="text-gray-700 mt-1">
+                      {candidate.history[candidate.history.length - 1].reason || 
+                       `Status changed to ${candidate.status}`}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      by {candidate.history[candidate.history.length - 1].changedBy} • 
+                      {new Date(candidate.history[candidate.history.length - 1].changedAt).toLocaleString()}
+                    </p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Status Edit Modal */}
+{showStatusEditModal && selectedStatusCandidate && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold">Update Status</h3>
+          <button
+            onClick={() => {
+              setShowStatusEditModal(false);
+              setSelectedStatusCandidate(null);
+              setStatusReason('');
+              setSelectedNewStatus('');
+            }}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        
+        <p className="text-gray-600 mb-4">
+          Updating status for <span className="font-semibold">{selectedStatusCandidate.name}</span>
+        </p>
+        
+        <div className="space-y-4">
+          {/* Status Selection */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Select Status</label>
+            <select
+              value={selectedNewStatus}
+              onChange={(e) => setSelectedNewStatus(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="Pending Screening">Pending Screening</option>
+              <option value="Pending Interview">Pending Interview</option>
+              <option value="Pending Client Screening">Pending Client Screening</option>
+              <option value="Pending Client Interview">Pending Client Interview</option>
+              <option value="Pending Offer">Pending Offer</option>
+              <option value="Offer Decline">Offer Decline</option>
+              <option value="Pending Joinee">Pending Joinee</option>
+              <option value="Interview Reject">Interview Reject</option>
+              <option value="Client Interview Reject">Client Interview Reject</option>
+              <option value="Screening Reject">Screening Reject</option>
+              <option value="Client Screening Reject">Client Screening Reject</option>
+
+            </select>
+          </div>
+          
+          {/* Reason/Description */}
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Reason / Description <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={statusReason}
+              onChange={(e) => setStatusReason(e.target.value)}
+              placeholder="Please provide a reason for this status change..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              rows="3"
+            />
+          </div>
+        </div>
+        
+        <div className="flex gap-3 justify-end mt-6">
+          <button
+            onClick={() => {
+              setShowStatusEditModal(false);
+              setSelectedStatusCandidate(null);
+              setStatusReason('');
+              setSelectedNewStatus('');
+            }}
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleStatusUpdate}
+            disabled={!selectedNewStatus || !statusReason.trim()}
+            className={`px-6 py-2 rounded-lg transition flex items-center gap-2 ${
+              !selectedNewStatus || !statusReason.trim()
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {statusLoading ? (
+              <>
+                <Loader size={16} className="animate-spin" />
+                Updating...
+              </>
+            ) : (
+              <>
+                <CheckCircle size={16} />
+                Update Status
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* History Modal */}
+{showHistoryModal && selectedHistoryCandidate && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[70vh] overflow-hidden">
+      <div className="p-6 border-b flex justify-between items-center">
+        <div>
+          <h3 className="text-xl font-bold">Candidate History</h3>
+          <p className="text-gray-500 text-sm">
+            {selectedHistoryCandidate.name} • Current Status: 
+            <span className={`ml-1 font-medium ${
+              selectedHistoryCandidate.status === 'Selected' ? 'text-green-600' : 
+              selectedHistoryCandidate.status === 'Rejected' ? 'text-red-600' : 
+              'text-yellow-600'
+            }`}>
+              {selectedHistoryCandidate.status}
+            </span>
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setShowHistoryModal(false);
+            setSelectedHistoryCandidate(null);
+          }}
+          className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition"
+        >
+          <X size={20} />
+        </button>
+      </div>
+      
+      <div className="p-6 overflow-y-auto max-h-[calc(70vh-120px)]">
+        {/* Selection Event */}
+        <div className="mb-6">
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <UserCheck size={14} className="text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Candidate Selected</span>
+                <span className="text-xs text-gray-400">
+                  {new Date(selectedHistoryCandidate.selectedAt).toLocaleString()}
+                </span>
+              </div>
+              <p className="text-sm text-gray-600">
+                Added to demand by <span className="font-medium">{selectedHistoryCandidate.selectedBy}</span>
+              </p>
+              <p className="text-xs text-gray-400 mt-1">Initial status: In Progress</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Status Change History */}
+        {selectedHistoryCandidate.history && selectedHistoryCandidate.history.length > 0 ? (
+          <div className="space-y-4">
+            {selectedHistoryCandidate.history.map((entry, index) => (
+              <div key={index} className="flex items-start gap-3">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                  entry.toStatus === 'Selected' ? 'bg-green-100' :
+                  entry.toStatus === 'Rejected' ? 'bg-red-100' : 'bg-yellow-100'
+                }`}>
+                  {entry.toStatus === 'Selected' ? (
+                    <CheckCircle size={14} className="text-green-600" />
+                  ) : entry.toStatus === 'Rejected' ? (
+                    <XCircle size={14} className="text-red-600" />
+                  ) : (
+                    <Clock size={14} className="text-yellow-600" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold">
+                      {entry.fromStatus} → {entry.toStatus}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {new Date(entry.changedAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700 mt-1 bg-gray-50 p-2 rounded">
+                    {entry.reason}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Updated by: <span className="font-medium">{entry.changedBy}</span>
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-gray-500 py-4">No additional history available</p>
         )}
       </div>
     </div>
