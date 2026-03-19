@@ -20,11 +20,13 @@ router.post("/", async (req, res) => {
   try {
     console.log(`\n📡 POST /api/login - Login attempt for user: ${username}`);
     
+    // MODIFIED: Also return u.name if it exists
     const result = await session.run(
       `MATCH (u:User {username: $username}) 
        RETURN u.username AS username, 
               u.passwordHash AS hash, 
-              u.role AS role`,
+              u.role AS role,
+              u.name AS name`,
       { username }
     );
 
@@ -51,14 +53,19 @@ router.post("/", async (req, res) => {
       });
     }
 
+    // Get name - if no name field exists, use username as fallback
+    const userName = record.get("name") || username;
+
     // Login successful
     console.log(`✅ Login successful for user: ${username} (Role: ${record.get("role")})`);
+    console.log(`   Display name: ${userName}`);
     
     res.json({
       success: true,
       message: "Login successful",
       user: { 
-        username: record.get("username"), 
+        username: record.get("username"),
+        name: userName, // ← ADD THIS
         role: record.get("role") 
       }
     });
