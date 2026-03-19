@@ -1,128 +1,427 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Header from "../components/Header";
-import bgImage from "../assets/Images/back.png";
+import logo from "../assets/Images/logo.png";
+import sideImage from "../assets/Images/head.png";
+
 import {
-  Briefcase,
+  User,
+  FileText,
+  Calendar,
   Users,
+  Receipt,
+  CalendarClock,
+  Shield,
+  DollarSign,
+  Briefcase,
   ClipboardList,
-  Globe
+  Plane,
+  BookOpen,
+  Laptop,
+  Award,
+  Search,
+  Mail,
+  UserCircle,
+  Globe,
+  Bell,
+  Clock,
+  MapPin,
+  MessageCircle
 } from "lucide-react";
 
 const Home = () => {
   const navigate = useNavigate();
+  const [userName, setUserName] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [showDevelopmentMessage, setShowDevelopmentMessage] = useState(false);
+  const [developmentMessage, setDevelopmentMessage] = useState("");
+
+  useEffect(() => {
+    const storedUser = JSON.parse(localStorage.getItem("user"));
+    if (storedUser) {
+      setUserName(storedUser.name || storedUser.username);
+    }
+
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedTime = currentTime.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: true 
+  });
+
+  const formattedDate = currentTime.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+
+  const locations = [
+    { name: "India", icon: <MapPin className="h-4 w-4" />, active: true },
+    { name: "US", icon: <Globe className="h-4 w-4" />, active: false },
+    { name: "China", icon: <Globe className="h-4 w-4" />, active: false }
+  ];
+
+  const allCards = [
+    { icon: <User />, title: "My Personal Details" },
+    { icon: <FileText />, title: "Policies" },
+    { icon: <Calendar />, title: "Holiday Calendar" },
+    { icon: <Users />, title: "Recruitment" },
+    { icon: <Receipt />, title: "Reimbursements" },
+    { icon: <CalendarClock />, title: "Leave Application" },
+    { icon: <Shield />, title: "Insurance" },
+    { icon: <DollarSign />, title: "Payroll" },
+    { icon: <Briefcase />, title: "My Client" },
+    { icon: <Award />, title: "UANDWE Awards" },
+    { icon: <ClipboardList />, title: "Code of Conduct" },
+    { icon: <Users />, title: "Employee Transfer" },
+    { icon: <DollarSign />, title: "Salary Advance" },
+    { icon: <Users />, title: "My Team" },
+    { icon: <Plane />, title: "Travel" },
+    { icon: <BookOpen />, title: "Training" },
+    { icon: <Laptop />, title: "My Assets" }
+  ];
+
+  const filteredCards = allCards.filter(card => 
+    card.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleCardClick = (title) => {
+    if (title === "Recruitment") {
+      // Navigate to recruitment page
+      navigate("/recruitment");
+    } else {
+      // Show development message for other cards
+      setDevelopmentMessage(`UANDWE Knowledge Base: "${title}" is under development`);
+      setShowDevelopmentMessage(true);
+      setTimeout(() => {
+        setShowDevelopmentMessage(false);
+      }, 3000);
+    }
+  };
 
   return (
-    /* BACKGROUND IMAGE */
-    <div
-      className="min-h-screen bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: `url(${bgImage})` }}
-    >
-      {/* OVERLAY FOR READABILITY */}
-      <div className="min-h-screen bg-white/50 backdrop-blur-sm">
-        <Header />
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Development Message Toast */}
+      {showDevelopmentMessage && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 animate-slideInDown">
+          <div className="bg-gray-900 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[400px]">
+            <span className="text-yellow-400 text-xl">🚧</span>
+            <div className="flex-1">
+              <p className="text-sm font-medium">{developmentMessage}</p>
+            </div>
+            <button 
+              onClick={() => setShowDevelopmentMessage(false)}
+              className="text-gray-400 hover:text-white text-xl"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
-        {/* HERO SECTION */}
-        <section className="px-8 pt-16 pb-20 max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+      {/* Animated Background Elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+      </div>
 
-            {/* LEFT */}
-            <div>
-              <h1 className="text-4xl font-extrabold text-gray-900 leading-tight">
-                UANDWE Recruitment <br />
-                <span className="text-blue-600">Hiring Portal</span>
-              </h1>
-
-              <p className="mt-6 text-lg text-gray-600 max-w-xl">
-                A centralized platform designed to manage job demands, recruiter
-                workflows, and candidate profiles with accuracy, speed, and
-                complete control.
-              </p>
-
-              <div className="mt-8 flex gap-4">
-                <button
-                  onClick={() => navigate("/demand")}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition"
-                >
-                  View Demand Dashboard
-                </button>
-
-                <button
-                  onClick={() => navigate("/recruiter")}
-                  className="px-6 py-3 border border-gray-800 rounded-xl hover:bg-gray-300 transition"
-                >
-                  Recruiter Workspace
-                </button>
-              </div>
+      {/* HEADER */}
+      <div className="relative w-full bg-gradient-to-r from-gray-900 via-gray-900 to-blue-900 overflow-hidden">
+        <div className="absolute inset-0 opacity-40" style={{
+          backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+          backgroundSize: '40px 40px'
+        }}></div>
+        
+        <div className="max-w-10xl mx-auto flex items-center justify-between relative">
+          <div className="flex items-center gap-4 p-6 w-1/2 animate-slideInLeft">
+            <div className="relative group">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full blur-lg opacity-75 group-hover:opacity-100 transition-opacity animate-pulse"></div>
+              <img 
+                src={logo} 
+                alt="logo" 
+                className="relative h-24 w-24 object-contain transform group-hover:scale-110 transition-transform duration-300"
+              />
             </div>
 
-            {/* RIGHT CARD */}
             <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 rounded-3xl blur-3xl opacity-20"></div>
-              <div className="relative bg-white rounded-3xl shadow-2xl p-8">
-                <h3 className="text-xl font-bold mb-4">Portal Highlights</h3>
-                <ul className="space-y-3 text-gray-600">
-                  <li>✔ Secure recruiter & admin access</li>
-                  <li>✔ Centralized candidate database</li>
-                  <li>✔ Demand ageing & priority tracking</li>
-                  <li>✔ Website job posting integration</li>
-                </ul>
+              <h1 className="text-5xl font-bold text-white mb-2">
+                Knowledge Base
+              </h1>
+              <p className="text-blue-200 text-lg relative">
+                Self service platform for all HR systems, policies and guidance
+                <span className="absolute -bottom-1 left-0 w-20 h-0.5 bg-gradient-to-r from-blue-400 to-transparent"></span>
+              </p>
+            </div>
+          </div>
+
+          <div className="w-2/3 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-l from-transparent to-gray-900 z-10"></div>
+            <img
+              src={sideImage}
+              alt="banner"
+              className="w-full h-82 object-cover transform group-hover:scale-105 transition-transform duration-700"
+            />
+            <div className="absolute top-10 right-10 w-2 h-2 bg-white rounded-full animate-ping"></div>
+            <div className="absolute bottom-10 left-10 w-3 h-3 bg-blue-400 rounded-full animate-ping animation-delay-1000"></div>
+          </div>
+        </div>
+      </div>
+
+      {/* MAIN */}
+      <section className="relative px-8 py-8 max-w-9xl mx-auto z-10">
+
+        {/* WELCOME + SEARCH + HR CONTACT */}
+        <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-lg rounded-2xl shadow-lg p-4 mb-6 -mt-2 animate-slideInDown">
+          <div className="flex items-center justify-between">
+
+            <div className="flex items-center gap-3 group">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full blur-md opacity-75 group-hover:opacity-100 transition-opacity"></div>
+                <UserCircle className="relative h-10 w-10 text-blue-600 group-hover:scale-110 transition-transform" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-800">
+                  Welcome,
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 font-bold ml-2">
+                    {userName || "Employee"}
+                  </span>
+                </h2>
+                <p className="text-xs text-gray-500">{formattedDate} • {formattedTime}</p>
               </div>
             </div>
 
+            <div className="flex items-center gap-6">
+              <div className="relative w-72 group">
+                <input
+                  type="text"
+                  placeholder="Search anything..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 py-3 pl-12 pr-4 rounded-xl border border-gray-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white/50 backdrop-blur-sm group-hover:shadow-lg"
+                />
+                <Search className="absolute left-4 top-3.5 h-5 w-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                {searchTerm && (
+                  <button 
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 bg-gradient-to-r from-blue-50 to-purple-50 px-4 py-2 rounded-xl border border-blue-100 hover:shadow-lg transition-all group">
+                <div className="relative">
+                  <Mail className="h-5 w-5 text-blue-600 group-hover:scale-110 transition-transform" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">HR Support</p>
+                  <span className="text-sm font-medium text-blue-600 group-hover:text-purple-600 transition-colors">
+                    swathi@uandwe.com
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-        </section>
+        </div>
 
-        {/* FEATURES */}
-        <section className="px-8 pb-20 max-w-7xl mx-auto">
-          <h2 className="text-2xl font-bold text-blue-700 mb-10 text-center">
-            What You Can Do
-          </h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-
-            <FeatureCard
-              icon={<ClipboardList className="h-8 w-8 text-blue-600" />}
-              title="Demand Management"
-              text="Create, track, and manage open positions with status and ageing visibility."
-            />
-
-            <FeatureCard
-              icon={<Users className="h-8 w-8 text-blue-600" />}
-              title="Candidate Database"
-              text="Store, search, and reuse candidate profiles securely and efficiently."
-            />
-
-            <FeatureCard
-              icon={<Briefcase className="h-8 w-8 text-blue-600" />}
-              title="Recruiter Workflow"
-              text="Upload resumes, avoid duplication, and collaborate seamlessly."
-            />
-
-            <FeatureCard
-              icon={<Globe className="h-8 w-8 text-blue-600" />}
-              title="Job Posting"
-              text="Publish jobs to the UANDWE website with one click and track applications."
-            />
-
+        {/* Location Selector */}
+        <div className="mb-8">
+          <div className="flex items-center gap-2 bg-white rounded-lg p-1 border border-gray-200 inline-flex">
+            {locations.map((location, index) => (
+              <button
+                key={index}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  location.active 
+                    ? 'bg-blue-600 text-white shadow-md' 
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {location.icon}
+                {location.name}
+              </button>
+            ))}
           </div>
-        </section>
+        </div>
+
+        {/* ALL WIDGETS - Unified Section with Centered Last Row */}
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-6">
+            {/* <div className="flex items-center gap-3">
+              <div className="h-8 w-1 bg-blue-600 rounded-full"></div>
+              <h3 className="text-xl font-semibold text-gray-800">Knowledge Base</h3>
+              <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-full">
+                {filteredCards.length} items
+              </span>
+            </div> */}
+          </div>
+
+          {/* Cards Grid with Last Row Centered */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+            {filteredCards.map((card, index) => (
+              <ProfessionalCard
+                key={index}
+                icon={card.icon}
+                title={card.title}
+                index={index}
+                onClick={() => handleCardClick(card.title)}
+              />
+            ))}
+          </div>
+          
+          {filteredCards.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-gray-500">No results found for "{searchTerm}"</p>
+            </div>
+          )}
+        </div>
+
+        {/* Live Chat Support */}
+        <div className="fixed bottom-6 right-6 z-30">
+          <button className="group relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full blur-lg opacity-75 group-hover:opacity-100 transition-opacity animate-pulse"></div>
+            <div className="relative bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all group-hover:scale-110">
+              <MessageCircle className="h-6 w-6" />
+            </div>
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-ping"></span>
+          </button>
+        </div>
 
         {/* FOOTER */}
-        <footer className="text-center py-6 text-sm text-gray-500 border-t">
-          © {new Date().getFullYear()} UANDWE Technologies — Recruitment Management System
+        <footer className="mt-16 pt-8 border-t border-gray-200">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <img src={logo} alt="UANDWE" className="h-8 w-8 object-contain opacity-70" />
+              <p className="text-sm text-gray-500">
+                © {new Date().getFullYear()} UANDWE Technologies
+              </p>
+            </div>
+            <div className="flex items-center gap-6">
+              <a href="#" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">
+                Privacy Policy
+              </a>
+              <a href="#" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">
+                Terms of Use
+              </a>
+              <a href="#" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">
+                Support
+              </a>
+            </div>
+            <p className="text-sm text-gray-400">
+              Employee Knowledge Base v2.0
+            </p>
+          </div>
         </footer>
-      </div>
+      </section>
+
+      <style jsx>{`
+        @keyframes blob {
+          0% { transform: translate(0px, 0px) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+          100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        .animation-delay-4000 {
+          animation-delay: 4s;
+        }
+        @keyframes slideInLeft {
+          from { transform: translateX(-100px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        .animate-slideInLeft {
+          animation: slideInLeft 0.8s ease-out;
+        }
+        @keyframes slideInDown {
+          from { transform: translateY(-100px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slideInDown {
+          animation: slideInDown 0.6s ease-out;
+        }
+        @keyframes fadeInScale {
+          0% {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+      `}</style>
     </div>
   );
 };
 
-const FeatureCard = ({ icon, title, text }) => (
-  <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition">
-    <div className="mb-4">{icon}</div>
-    <h4 className="text-lg font-semibold text-gray-800 mb-2">{title}</h4>
-    <p className="text-sm text-gray-600">{text}</p>
-  </div>
-);
+const ProfessionalCard = ({ icon, title, index, onClick }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <div
+      className="group relative"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={onClick}
+      style={{
+        animation: `fadeInScale 0.4s ease-out ${index * 0.05}s both`
+      }}
+    >
+      {/* Card */}
+      <div className={`
+        relative bg-white rounded-xl border border-gray-200 p-5
+        transition-all duration-300 cursor-pointer
+        ${isHovered 
+          ? 'border-blue-600 shadow-lg transform -translate-y-1' 
+          : 'hover:border-gray-300 hover:shadow-md'
+        }
+      `}>
+        {/* Icon Container */}
+        <div className="mb-3">
+          <div className={`
+            inline-flex p-2.5 rounded-lg transition-all duration-300
+            ${isHovered 
+              ? 'bg-blue-600/10 text-blue-600' 
+              : 'bg-gray-50 text-gray-600'
+            }
+          `}>
+            {React.cloneElement(icon, { 
+              className: "h-5 w-5 transition-transform duration-300 group-hover:scale-110" 
+            })}
+          </div>
+        </div>
+
+        {/* Title */}
+        <h4 className={`
+          text-sm font-medium transition-colors duration-300
+          ${isHovered ? 'text-blue-600' : 'text-gray-700'}
+        `}>
+          {title}
+        </h4>
+
+        {/* Bottom indicator */}
+        <div className={`
+          absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-purple-600
+          transition-transform duration-300 origin-left
+          ${isHovered ? 'scale-x-100' : 'scale-x-0'}
+        `} />
+      </div>
+    </div>
+  );
+};
 
 export default Home;
