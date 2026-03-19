@@ -19,36 +19,6 @@ const parseKeySkills = (skills) => {
   return [];
 };
 
-// Helper function to format candidate for response
-const formatCandidate = (candidate) => {
-  const properties = candidate.properties || candidate;
-  
-  const canId = properties.Can_ID || properties.canId || properties.id;
-  
-  return {
-    id: canId ? Number(canId) : null,
-    actualId: canId ? Number(canId) : null,
-    canId: canId ? Number(canId) : null,
-    name: properties.name || properties['Candidate Name'] || '',
-    email: properties.email || properties['Email'] || '',
-    mobile: properties.mobile || properties['Mobile No'] || '',
-    experience: properties.experience || properties['Experience'] || '',
-    currentOrg: properties.currentOrg || properties['Current Org'] || '',
-    currentCTC: properties.currentCTC || properties['Current CTC'] || '',
-    expectedCTC: properties.expectedCTC || properties['Expected CTC'] || '',
-    noticePeriod: properties.noticePeriod || properties['Notice Period in days'] || '',
-    profileSourcedBy: properties.profileSourcedBy || properties['Profiles sourced by'] || '',
-    clientName: properties.clientName || properties['Client Name'] || '',
-    profileSubmissionDate: properties.profileSubmissionDate || properties['Profile submission date'] || '',
-    visaType: properties.visaType || properties['Visa type'] || 'NA',
-    resumePath: properties.resumePath || '',
-    googleDriveViewLink: properties.googleDriveViewLink || '',
-    keySkills: parseKeySkills(properties.keySkills || properties['Key Skills']),
-    selectedAt: properties.selectedAt || new Date().toISOString(),
-    status: properties.status || 'In Progress'
-  };
-};
-
 /**
  * POST /api/selected-candidates/:demandId
  * Save selected candidates for a demand
@@ -58,7 +28,6 @@ router.post("/:demandId", async (req, res) => {
   const { candidates, selectedBy } = req.body;
   
   console.log(`\n📡 POST /api/selected-candidates/${demandId} - Saving candidates`);
-  console.log("Request body:", JSON.stringify(req.body, null, 2));
   
   if (!demandId) {
     return res.status(400).json({ success: false, message: "Demand ID is required" });
@@ -78,6 +47,21 @@ router.post("/:demandId", async (req, res) => {
     driver = getDriver();
     const session = driver.session();
     
+    // Check if demand exists
+    const demandCheck = await session.run(
+      "MATCH (d:Demand {id: $demandId}) RETURN d",
+      { demandId: parseInt(demandId) }
+    );
+    
+    if (demandCheck.records.length === 0) {
+      await session.close();
+      return res.status(404).json({ 
+        success: false, 
+        message: `Demand with ID ${demandId} not found` 
+      });
+    }
+    
+    // Process each candidate
     for (const candidate of candidatesArray) {
       const canId = candidate.canId || candidate.actualId || candidate.id;
       
@@ -86,89 +70,49 @@ router.post("/:demandId", async (req, res) => {
         continue;
       }
       
-      console.log(`Processing candidate with canId: ${canId}, name: ${candidate.name}`);
+      console.log(`Processing candidate with Can_ID: ${canId}`);
       
-      const demandCheck = await session.run(
-        "MATCH (d:Demand {id: $demandId}) RETURN d",
-        { demandId: parseInt(demandId) }
-      );
+      const now = new Date().toISOString();
+      const selectedByName = selectedBy || 'Unknown';
       
-      if (demandCheck.records.length === 0) {
-        console.error(`Demand with ID ${demandId} not found`);
-        await session.close();
-        return res.status(404).json({ 
-          success: false, 
-          message: `Demand with ID ${demandId} not found` 
-        });
-      }
+      // Create history entry for selection
+      const historyEntry = {
+        action: 'SELECTED',
+        status: 'In Progress',
+        changedBy: selectedByName,
+        changedAt: now,
+        reason: 'Candidate selected for demand'
+      };
       
+      // Create or update the relationship with history array
       await session.run(`
         MATCH (d:Demand {id: $demandId})
-        MERGE (sc:SelectedCandidate {canId: $canId})
-        ON CREATE SET 
-          sc.name = $name,
-          sc.email = $email,
-          sc.mobile = $mobile,
-          sc.experience = $experience,
-          sc.currentOrg = $currentOrg,
-          sc.currentCTC = $currentCTC,
-          sc.expectedCTC = $expectedCTC,
-          sc.noticePeriod = $noticePeriod,
-          sc.profileSourcedBy = $profileSourcedBy,
-          sc.clientName = $clientName,
-          sc.profileSubmissionDate = $profileSubmissionDate,
-          sc.visaType = $visaType,
-          sc.resumePath = $resumePath,
-          sc.googleDriveViewLink = $googleDriveViewLink,
-          sc.keySkills = $keySkills,
-          sc.selectedAt = $selectedAt,
-          sc.selectedBy = $selectedBy,
-          sc.status = $status
-        ON MATCH SET
-          sc.selectedAt = $selectedAt,
-          sc.status = $status
-        MERGE (d)-[:HAS_SELECTED_CANDIDATE]->(sc)
+        MATCH (c:Candidate_Profile {Can_ID: $canId})
+        MERGE (d)-[r:HAS_SELECTED_CANDIDATE]->(c)
+        SET r.selectedAt = $selectedAt,
+            r.selectedBy = $selectedBy,
+            r.status = $status,
+            r.history = $history,
+            r.updatedAt = $selectedAt
       `, {
         demandId: parseInt(demandId),
-        canId: Number(canId),
-        name: candidate.name || '',
-        email: candidate.email || '',
-        mobile: candidate.mobile || '',
-        experience: candidate.experience || '',
-        currentOrg: candidate.currentOrg || '',
-        currentCTC: candidate.currentCTC || '',
-        expectedCTC: candidate.expectedCTC || '',
-        noticePeriod: candidate.noticePeriod || '',
-        profileSourcedBy: candidate.profileSourcedBy || '',
-        clientName: candidate.clientName || '',
-        profileSubmissionDate: candidate.profileSubmissionDate || '',
-        visaType: candidate.visaType || 'NA',
-        resumePath: candidate.resumePath || '',
-        googleDriveViewLink: candidate.googleDriveViewLink || '',
-        keySkills: JSON.stringify(candidate.keySkills || []),
-        selectedAt: candidate.selectedAt || new Date().toISOString(),
-        selectedBy: selectedBy || 'Unknown',
-        status: candidate.status || 'In Progress'
+        canId: parseInt(canId),
+        selectedAt: now,
+        selectedBy: selectedByName,
+        status: 'In Progress',
+        history: JSON.stringify([historyEntry]) // Store as JSON array
       });
     }
     
+    // Count total selected candidates
     const countResult = await session.run(`
-      MATCH (d:Demand {id: $demandId})-[:HAS_SELECTED_CANDIDATE]->(sc:SelectedCandidate)
-      RETURN count(sc) as count
+      MATCH (d:Demand {id: $demandId})-[:HAS_SELECTED_CANDIDATE]->(c:Candidate_Profile)
+      RETURN count(c) as count
     `, { demandId: parseInt(demandId) });
     
-    const countValue = countResult.records[0].get('count');
-    let count;
-    
-    if (countValue && typeof countValue === 'object' && countValue.low !== undefined) {
-      count = countValue.toNumber ? countValue.toNumber() : countValue.low;
-    } else {
-      count = Number(countValue);
-    }
+    const count = countResult.records[0].get('count').low || countResult.records[0].get('count');
     
     await session.close();
-    
-    console.log(`✅ Successfully saved candidates for demand ${demandId}, total: ${count}`);
     
     res.json({
       success: true,
@@ -178,23 +122,17 @@ router.post("/:demandId", async (req, res) => {
     
   } catch (err) {
     console.error("❌ Error saving selected candidates:", err);
-    console.error("Error details:", {
-      message: err.message,
-      stack: err.stack,
-      code: err.code
-    });
     res.status(500).json({
       success: false,
       message: "Failed to save selected candidates",
-      error: err.message,
-      details: err.stack
+      error: err.message
     });
   }
 });
 
 /**
  * GET /api/selected-candidates/:demandId
- * Get selected candidates for a demand
+ * Get selected candidates for a demand with full history
  */
 router.get("/:demandId", async (req, res) => {
   const { demandId } = req.params;
@@ -210,43 +148,51 @@ router.get("/:demandId", async (req, res) => {
   
   try {
     const result = await session.run(`
-      MATCH (d:Demand {id: $demandId})-[:HAS_SELECTED_CANDIDATE]->(sc:SelectedCandidate)
-      RETURN sc
-      ORDER BY sc.selectedAt DESC
+      MATCH (d:Demand {id: $demandId})-[r:HAS_SELECTED_CANDIDATE]->(c:Candidate_Profile)
+      RETURN c, r
+      ORDER BY r.selectedAt DESC
     `, { demandId: parseInt(demandId) });
     
     const candidates = result.records.map(record => {
-      const candidate = record.get('sc').properties;
+      const candidate = record.get('c').properties;
+      const relationship = record.get('r').properties;
       
-      const formatValue = (val) => {
-        if (val && typeof val === 'object' && val.low !== undefined) {
-          return val.toNumber ? val.toNumber() : val.low;
+      // Parse history - it's stored as JSON string
+      let history = [];
+      if (relationship.history) {
+        try {
+          history = typeof relationship.history === 'string' 
+            ? JSON.parse(relationship.history) 
+            : relationship.history;
+        } catch (e) {
+          console.error("Error parsing history:", e);
+          history = [];
         }
-        return val;
-      };
+      }
       
       return {
-        id: formatValue(candidate.canId),
-        actualId: formatValue(candidate.canId),
-        canId: formatValue(candidate.canId),
-        name: candidate.name || '',
-        email: candidate.email || '',
-        mobile: candidate.mobile || '',
-        experience: candidate.experience || '',
-        currentOrg: candidate.currentOrg || '',
-        currentCTC: candidate.currentCTC || '',
-        expectedCTC: candidate.expectedCTC || '',
-        noticePeriod: candidate.noticePeriod || '',
-        profileSourcedBy: candidate.profileSourcedBy || '',
-        clientName: candidate.clientName || '',
-        profileSubmissionDate: candidate.profileSubmissionDate || '',
-        visaType: candidate.visaType || 'NA',
+        // Candidate basic info (what you want to show)
+        id: candidate.Can_ID,
+        name: candidate['Candidate Name'] || '',
         resumePath: candidate.resumePath || '',
         googleDriveViewLink: candidate.googleDriveViewLink || '',
-        keySkills: parseKeySkills(candidate.keySkills),
-        selectedAt: candidate.selectedAt,
-        selectedBy: candidate.selectedBy,
-        status: candidate.status
+        
+        // Who added them and when
+        selectedBy: relationship.selectedBy,
+        selectedAt: relationship.selectedAt,
+        
+        // Current status
+        status: relationship.status || 'In Progress',
+        
+        // Full history of all actions
+        history: history,
+        
+        // Additional fields if needed for display
+        email: candidate.Email || '',
+        mobile: candidate['Mobile No'] || '',
+        experience: candidate.Experience || '',
+        currentOrg: candidate['Current Org'] || '',
+        keySkills: parseKeySkills(candidate['Key Skills'])
       };
     });
     
@@ -273,12 +219,13 @@ router.get("/:demandId", async (req, res) => {
 
 /**
  * PUT /api/selected-candidates/status
- * Update candidate status (Selected/Rejected)
+ * Update candidate status with reason and track who did it
  */
 router.put("/status", async (req, res) => {
-  const { candidateId, demandId, status } = req.body;
+  const { candidateId, demandId, status, reason, changedBy } = req.body;
   
   console.log(`\n📡 PUT /api/selected-candidates/status - Updating candidate ${candidateId} to ${status}`);
+  console.log(`Reason: ${reason}, Changed by: ${changedBy}`);
   
   if (!candidateId || !demandId || !status) {
     return res.status(400).json({ 
@@ -291,33 +238,88 @@ router.put("/status", async (req, res) => {
   const session = driver.session();
   
   try {
-    const result = await session.run(`
-      MATCH (d:Demand {id: $demandId})-[r:HAS_SELECTED_CANDIDATE]->(sc:SelectedCandidate {canId: $candidateId})
-      SET sc.status = $status,
-          sc.updatedAt = $updatedAt
-      RETURN sc
+    // First get the current relationship to get existing history
+    const getResult = await session.run(`
+      MATCH (d:Demand {id: $demandId})-[r:HAS_SELECTED_CANDIDATE]->(c:Candidate_Profile {Can_ID: $candidateId})
+      RETURN r
     `, {
       demandId: parseInt(demandId),
-      candidateId: parseInt(candidateId),
-      status: status,
-      updatedAt: new Date().toISOString()
+      candidateId: parseInt(candidateId)
     });
     
-    if (!result.records.length) {
+    if (!getResult.records.length) {
       return res.status(404).json({ 
         success: false, 
         message: "Candidate not found for this demand" 
       });
     }
     
-    const updatedCandidate = result.records[0].get('sc').properties;
+    const relationship = getResult.records[0].get('r').properties;
+    
+    // Parse existing history
+    let history = [];
+    if (relationship.history) {
+      try {
+        history = typeof relationship.history === 'string' 
+          ? JSON.parse(relationship.history) 
+          : relationship.history;
+      } catch (e) {
+        history = [];
+      }
+    }
+    
+    // Create new history entry for this status change
+    const now = new Date().toISOString();
+    const changedByName = changedBy || relationship.selectedBy || 'Unknown';
+    
+    const historyEntry = {
+      action: 'STATUS_CHANGED',
+      fromStatus: relationship.status || 'In Progress',
+      toStatus: status,
+      changedBy: changedByName,
+      changedAt: now,
+      reason: reason || `Status changed to ${status}`
+    };
+    
+    // Add to history array
+    history.push(historyEntry);
+    
+    // Update the relationship with new status and history
+    const updateResult = await session.run(`
+      MATCH (d:Demand {id: $demandId})-[r:HAS_SELECTED_CANDIDATE]->(c:Candidate_Profile {Can_ID: $candidateId})
+      SET r.status = $status,
+          r.history = $history,
+          r.updatedAt = $updatedAt,
+          r.updatedBy = $changedBy
+      RETURN r, c
+    `, {
+      demandId: parseInt(demandId),
+      candidateId: parseInt(candidateId),
+      status: status,
+      history: JSON.stringify(history),
+      updatedAt: now,
+      changedBy: changedByName
+    });
+    
+    const updatedRelationship = updateResult.records[0].get('r').properties;
+    const candidate = updateResult.records[0].get('c').properties;
     
     console.log(`✅ Candidate ${candidateId} status updated to ${status}`);
     
+    // Return updated info
     res.json({
       success: true,
       message: `Candidate status updated to ${status}`,
-      data: updatedCandidate
+      data: {
+        id: candidate.Can_ID,
+        name: candidate['Candidate Name'] || '',
+        status: updatedRelationship.status,
+        selectedBy: updatedRelationship.selectedBy,
+        selectedAt: updatedRelationship.selectedAt,
+        history: history,
+        updatedAt: updatedRelationship.updatedAt,
+        updatedBy: updatedRelationship.updatedBy
+      }
     });
     
   } catch (err) {
@@ -325,6 +327,69 @@ router.put("/status", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update candidate status",
+      error: err.message
+    });
+  } finally {
+    await session.close();
+  }
+});
+
+/**
+ * GET /api/selected-candidates/history/:demandId/:candidateId
+ * Get full history for a specific candidate in a demand
+ */
+router.get("/history/:demandId/:candidateId", async (req, res) => {
+  const { demandId, candidateId } = req.params;
+  
+  console.log(`\n📡 GET /api/selected-candidates/history/${demandId}/${candidateId} - Fetching candidate history`);
+  
+  const driver = getDriver();
+  const session = driver.session();
+  
+  try {
+    const result = await session.run(`
+      MATCH (d:Demand {id: $demandId})-[r:HAS_SELECTED_CANDIDATE]->(c:Candidate_Profile {Can_ID: $candidateId})
+      RETURN r.history as history, r.status as status, r.selectedBy as selectedBy, r.selectedAt as selectedAt
+    `, {
+      demandId: parseInt(demandId),
+      candidateId: parseInt(candidateId)
+    });
+    
+    if (!result.records.length) {
+      return res.status(404).json({
+        success: false,
+        message: "Candidate not found for this demand"
+      });
+    }
+    
+    const historyValue = result.records[0].get('history');
+    let history = [];
+    
+    if (historyValue) {
+      try {
+        history = typeof historyValue === 'string' 
+          ? JSON.parse(historyValue) 
+          : historyValue;
+      } catch (e) {
+        history = [];
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        history: history,
+        currentStatus: result.records[0].get('status'),
+        selectedBy: result.records[0].get('selectedBy'),
+        selectedAt: result.records[0].get('selectedAt')
+      }
+    });
+    
+  } catch (err) {
+    console.error("❌ Error fetching history:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch history",
       error: err.message
     });
   } finally {
@@ -346,8 +411,8 @@ router.delete("/:demandId/:candidateId", async (req, res) => {
   
   try {
     await session.run(`
-      MATCH (d:Demand {id: $demandId})-[r:HAS_SELECTED_CANDIDATE]->(sc:SelectedCandidate {canId: $candidateId})
-      DELETE r, sc
+      MATCH (d:Demand {id: $demandId})-[r:HAS_SELECTED_CANDIDATE]->(c:Candidate_Profile {Can_ID: $candidateId})
+      DELETE r
     `, {
       demandId: parseInt(demandId),
       candidateId: parseInt(candidateId)
@@ -384,8 +449,8 @@ router.delete("/:demandId", async (req, res) => {
   
   try {
     await session.run(`
-      MATCH (d:Demand {id: $demandId})-[r:HAS_SELECTED_CANDIDATE]->(sc:SelectedCandidate)
-      DELETE r, sc
+      MATCH (d:Demand {id: $demandId})-[r:HAS_SELECTED_CANDIDATE]->()
+      DELETE r
     `, { demandId: parseInt(demandId) });
     
     res.json({
