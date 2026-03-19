@@ -6,6 +6,7 @@ import Home from "./Pages/Home";
 import Demand from "./Pages/Demand";
 import Recruiter from "./Pages/Recruiter";
 import CreateUser from "./Pages/CreateUser";
+import R_home from "./Pages/R_home.jsx";
 
 // Protected Route component
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
@@ -56,6 +57,9 @@ function App() {
           </ProtectedRoute>
         }
       />
+
+      <Route path="/recruitment" element={<R_home />} />
+
 
       {/* Admin Only Route */}
       <Route
