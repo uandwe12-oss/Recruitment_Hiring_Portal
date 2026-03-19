@@ -1123,91 +1123,60 @@ useEffect(() => {
     filterCandidatesBySkill(skill);
   };
 
-// Handle adding candidate to selection with auto-save
+// In Recruiter.jsx - Updated handleSelectCandidate
 const handleSelectCandidate = async (candidate, e) => {
   e.stopPropagation();
-  if (!candidate || !candidate.id) {
-    console.error("Invalid candidate for selection:", candidate);
-    alert("Cannot select: Invalid candidate data");
-    return;
-  }
   
   // Check if already selected
   const isAlreadySelected = selectedCandidates.some(c => c.id === candidate.id);
   
   if (!isAlreadySelected) {
     try {
-      // Get demandId from URL params
       const demandId = searchParams.get('demandId');
       
       if (!demandId) {
-        alert("Demand ID not found. Please make sure you came from a demand.");
+        alert("Demand ID not found");
         return;
       }
       
-      console.log(`Saving candidate ${candidate.canId || candidate.id} for demand ${demandId}`);
+      // Get current user from localStorage - FIXED: Get both name and username
+      const user = JSON.parse(localStorage.getItem("user")) || {};
       
-      // Prepare candidate data with all necessary fields
+      // Use username if available, otherwise use name, fallback to 'Unknown'
+      const selectedByName = user.username || user.name || 'Unknown';
+      
+      console.log(`Saving candidate ${candidate.id} for demand ${demandId} by ${selectedByName}`);
+      
+      // Prepare minimal candidate data
       const candidateData = {
-        canId: candidate.canId || candidate.actualId || candidate.id,
-        name: candidate.name || '',
-        email: candidate.email || '',
-        mobile: candidate.mobile || '',
-        experience: candidate.experience || '',
-        currentOrg: candidate.currentOrg || '',
-        currentCTC: candidate.currentCTC || '',
-        expectedCTC: candidate.expectedCTC || '',
-        noticePeriod: candidate.noticePeriod || '',
-        profileSourcedBy: candidate.profileSourcedBy || '',
-        clientName: candidate.clientName || '',
-        profileSubmissionDate: candidate.profileSubmissionDate || '',
-        visaType: candidate.visaType || 'NA',
-        resumePath: candidate.resumePath || '',
-        googleDriveViewLink: candidate.googleDriveViewLink || '',
-        keySkills: candidate.keySkills || [],
-        selectedAt: new Date().toISOString(),
-        status: 'In Progress'
+        canId: candidate.canId || candidate.actualId || candidate.id
       };
       
-      // Add to local state immediately for UI update
+      // Add to local state immediately
       setSelectedCandidates(prev => [...prev, candidate]);
       
-      // Show optimistic update
-      setSuccessMessage(`Adding ${candidate.name}...`);
-      
-      // Save to backend
+      // Save to backend with proper selectedBy value
       const response = await axios.post(
         `https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`,
         {
           candidates: [candidateData],
-          selectedBy: user?.name || user?.email || 'Unknown'
+          selectedBy: selectedByName  // ← This is the key fix
         }
       );
       
       if (response.data.success) {
-        setSuccessMessage(`✅ ${candidate.name} added to demand successfully!`);
+        setSuccessMessage(`✅ ${candidate.name} added to demand!`);
         setTimeout(() => setSuccessMessage(""), 2000);
       }
       
     } catch (err) {
       console.error('Error saving candidate:', err);
-      
-      // Remove from local state if save failed
       setSelectedCandidates(prev => prev.filter(c => c.id !== candidate.id));
-      
-      // Show error message
-      if (err.response?.status === 404) {
-        setError("Selected candidates API not found. Please check backend.");
-      } else if (err.response?.status === 400) {
-        setError(err.response.data?.message || "Invalid request");
-      } else {
-        setError(`Failed to save ${candidate.name}: ${err.response?.data?.message || err.message}`);
-      }
+      setError(`Failed to save ${candidate.name}`);
       setTimeout(() => setError(null), 3000);
     }
   }
 };
-
 // Handle removing candidate from selection
 const handleRemoveCandidate = async (candidateId, e) => {
   if (e) e.stopPropagation();
