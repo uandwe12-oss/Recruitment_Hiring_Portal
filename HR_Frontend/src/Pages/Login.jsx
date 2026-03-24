@@ -91,13 +91,10 @@ const Login = () => {
                 }`}
               >
                 <img src={logo} alt="UANDWE Logo" className="h-24 w-24" />
-                <h1 className="text-3xl font-bold text-white">
-                  UAW <span className="text-blue-100">Technology</span>
+                <h1 className="text-3xl font-bold text-blue-100">
+                  UAW Technologies
                 </h1>
-                <p className="text-blue-100 text-center max-w-sm">
-                  Internal HR Management Portal  
-                  Access restricted to authorized staff only.
-                </p>
+              
 
                 <img
                   src={loginImage}
@@ -114,13 +111,13 @@ const Login = () => {
                 {/* MOBILE LOGO */}
                 <div className="lg:hidden flex justify-center items-center gap-3 mb-8">
                   <img src={logo} className="h-12 w-12" alt="Logo"/>
-                  <h1 className="text-xl font-bold">UAW Technology</h1>
+                  <h1 className="text-xl font-bold"> UAW Technologies</h1>
                 </div>
 
                 {/* HEADER */}
                 <div className="mb-8 text-center">
-                  <h2 className="text-4xl font-bold text-gray-800 mb-2">
-                    HR Management Portal
+                  <h2 className="text-5xl font-bold text-gradient-to-br from-blue-500 via-gray-700 mb-2">
+                  Knowledge Base
                   </h2>
                   <h4 className="text-4xl font-medium text-gray-800 mb-2 py-9">
                     Welcome
@@ -192,7 +189,7 @@ const Login = () => {
 
                   {/* FOOTER */}
                   <p className="text-center text-sm text-gray-500 pt-4">
-                    © {new Date().getFullYear()} UAW Technology
+                    © {new Date().getFullYear()} UAW Technologies
                   </p>
 
                 </form>
