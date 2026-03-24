@@ -1127,7 +1127,6 @@ useEffect(() => {
 const handleSelectCandidate = async (candidate, e) => {
   e.stopPropagation();
   
-  // Check if already selected
   const isAlreadySelected = selectedCandidates.some(c => c.id === candidate.id);
   
   if (!isAlreadySelected) {
@@ -1139,28 +1138,27 @@ const handleSelectCandidate = async (candidate, e) => {
         return;
       }
       
-      // Get current user from localStorage - FIXED: Get both name and username
       const user = JSON.parse(localStorage.getItem("user")) || {};
-      
-      // Use username if available, otherwise use name, fallback to 'Unknown'
       const selectedByName = user.username || user.name || 'Unknown';
       
-      console.log(`Saving candidate ${candidate.id} for demand ${demandId} by ${selectedByName}`);
-      
-      // Prepare minimal candidate data
+      // Prepare candidate data with initial status
       const candidateData = {
-        canId: candidate.canId || candidate.actualId || candidate.id
+        canId: candidate.canId || candidate.actualId || candidate.id,
+        status: 'Pending Screening' // Start with first pending status
       };
       
       // Add to local state immediately
-      setSelectedCandidates(prev => [...prev, candidate]);
+      setSelectedCandidates(prev => [...prev, {
+        ...candidate,
+        status: 'Pending Screening'
+      }]);
       
-      // Save to backend with proper selectedBy value
+      // Save to backend
       const response = await axios.post(
         `https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`,
         {
           candidates: [candidateData],
-          selectedBy: selectedByName  // ← This is the key fix
+          selectedBy: selectedByName
         }
       );
       
@@ -1957,6 +1955,20 @@ const handleRemoveCandidate = async (candidateId, e) => {
     }
   };
 
+  // Helper function to check if status is active (should be shown in recruiter)
+const isActiveStatus = (status) => {
+  const activeStatuses = [
+    'Pending Screening',
+    'Pending Interview',
+    'Pending Client Screening',
+    'Pending Client Interview',
+    'Pending Offer',
+    'Pending Joinee'
+  ];
+  return activeStatuses.includes(status);
+};
+
+
   // Add this useEffect to fetch existing selected candidates when component mounts
 useEffect(() => {
   const fetchExistingSelections = async () => {
@@ -1965,10 +1977,18 @@ useEffect(() => {
       try {
         const response = await axios.get(`https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`);
         if (response.data.success) {
-          // Filter to only include candidates that exist in the current candidates list
-          const existingCandidates = response.data.data.filter(saved => 
-            candidates.some(c => c.id === saved.id)
-          );
+          // Merge status from the selected data and filter out inactive statuses
+          const existingCandidates = response.data.data
+            .map(selected => {
+              const matchingCandidate = candidates.find(c => c.id === selected.id);
+              return {
+                ...matchingCandidate,
+                status: selected.status, // Get the actual status from database
+                history: selected.history
+              };
+            })
+            .filter(c => c !== undefined && isActiveStatus(c.status)); // ← FILTER OUT INACTIVE STATUSES
+          
           setSelectedCandidates(existingCandidates);
         }
       } catch (err) {
@@ -1978,7 +1998,24 @@ useEffect(() => {
   };
   
   fetchExistingSelections();
-}, [searchParams, candidates]); // Run when URL params or candidates change
+}, [searchParams, candidates]);
+
+// Refresh selected candidates when component mounts and when window gets focus
+useEffect(() => {
+  const refreshSelections = () => {
+    const demandId = searchParams.get('demandId');
+    if (demandId && candidates.length > 0) {
+      fetchExistingSelections();
+    }
+  };
+  
+  // Refresh when window gets focus (user returns to tab)
+  window.addEventListener('focus', refreshSelections);
+  
+  return () => {
+    window.removeEventListener('focus', refreshSelections);
+  };
+}, [searchParams, candidates]);
 
   // Load data on component mount
   useEffect(() => {
@@ -2588,20 +2625,72 @@ useEffect(() => {
     <Trash2 size={16} />
   </button>
   
-  {/* Check if candidate is already selected for this demand */}
-  {selectedCandidates.some(c => c.id === candidate.id) ? (
-    <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded text-sm font-medium flex items-center gap-1">
-      <Clock size={14} />
-      In Progress
-    </span>
-  ) : (
-    <button
-      onClick={(e) => handleSelectCandidate(candidate, e)}
-      className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-sm font-medium"
-    >
-      Select
-    </button>
-  )}
+{/* Check if candidate is already selected and get its status */}
+{(() => {
+  const selectedInfo = selectedCandidates.find(c => c.id === candidate.id);
+  
+  // Define pending statuses that should show as "In Progress"
+  const pendingStatuses = [
+    'Pending Screening',
+    'Pending Interview', 
+    'Pending Client Screening',
+    'Pending Client Interview',
+    'Pending Offer',
+    'Pending Joinee'
+  ];
+  
+  // Define final statuses that should NOT show anything
+  const finalStatuses = [
+    'Offer Decline', 
+    'Interview Reject', 
+    'Client Interview Reject', 
+    'Screening Reject', 
+    'Client Screening Reject'
+  ];
+  
+  if (selectedInfo) {
+    const isPending = pendingStatuses.includes(selectedInfo.status);
+    const isFinal = finalStatuses.includes(selectedInfo.status);
+    
+    if (isPending) {
+      // Show "In Progress" for all pending statuses
+      return (
+        <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded text-sm font-medium flex items-center gap-1">
+          <Clock size={14} />
+          In Progress
+        </span>
+      );
+    } else if (isFinal) {
+      // For final statuses, don't show anything - treat as not selected
+      return (
+        <button
+          onClick={(e) => handleSelectCandidate(candidate, e)}
+          className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-sm font-medium"
+        >
+          Select
+        </button>
+      );
+    } else {
+      // Fallback for any other status (shouldn't happen)
+      return (
+        <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded text-sm font-medium flex items-center gap-1">
+          <Clock size={14} />
+          In Progress
+        </span>
+      );
+    }
+  } else {
+    // Not selected yet - show Select button
+    return (
+      <button
+        onClick={(e) => handleSelectCandidate(candidate, e)}
+        className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-sm font-medium"
+      >
+        Select
+      </button>
+    );
+  }
+})()}
 </div>
                               </div>
 
