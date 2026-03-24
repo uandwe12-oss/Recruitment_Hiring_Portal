@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/Images/logo.png";
 import sideImage from "../assets/Images/head.png";
-
+ import ReactCountryFlag from "react-country-flag";
 import {
   User,
   FileText,
@@ -49,6 +49,12 @@ const Home = () => {
     return () => clearInterval(timer);
   }, []);
 
+  const handleLogout = () => {
+  localStorage.removeItem("user");
+  navigate("/");
+};
+
+
   const formattedTime = currentTime.toLocaleTimeString('en-US', { 
     hour: '2-digit', 
     minute: '2-digit',
@@ -62,11 +68,13 @@ const Home = () => {
     day: 'numeric' 
   });
 
-  const locations = [
-    { name: "India", icon: <MapPin className="h-4 w-4" />, active: true },
-    { name: "US", icon: <Globe className="h-4 w-4" />, active: false },
-    { name: "China", icon: <Globe className="h-4 w-4" />, active: false }
-  ];
+
+
+const locations = [
+  { name: "India", code: "IN", active: true },
+  { name: "US", code: "US", active: false },
+  { name: "China", code: "CN", active: false }
+];
 
   const allCards = [
     { icon: <User />, title: "My Personal Details" },
@@ -162,6 +170,19 @@ const Home = () => {
             </div>
           </div>
 
+<div className="absolute top-6 right-6 z-50">
+  <button
+    onClick={handleLogout}
+    className="px-4 py-2 rounded-xl text-sm font-semibold 
+    bg-white/10 backdrop-blur-md border border-white/20 
+    text-white shadow-lg 
+    hover:bg-gradient-to-r hover:from-blue-500 hover:to-purple-500 
+    transition-all duration-300"
+  >
+    Logout
+  </button>
+</div>
+
           <div className="w-2/3 relative overflow-hidden group">
             <div className="absolute inset-0 bg-gradient-to-l from-transparent to-gray-900 z-10"></div>
             <img
@@ -238,18 +259,23 @@ const Home = () => {
         <div className="mb-8">
           <div className="flex items-center gap-2 bg-white rounded-lg p-1 border border-gray-200 inline-flex">
             {locations.map((location, index) => (
-              <button
-                key={index}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  location.active 
-                    ? 'bg-blue-600 text-white shadow-md' 
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {location.icon}
-                {location.name}
-              </button>
-            ))}
+  <button
+    key={index}
+    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border
+      ${
+        location.active
+          ? "bg-blue-600 text-white border-blue-600 shadow-md"
+          : "bg-white text-gray-600 border-gray-200 hover:border-blue-400 hover:bg-blue-50"
+      }`}
+  >
+    <ReactCountryFlag
+      countryCode={location.code}
+      svg
+      style={{ width: "18px", height: "18px" }}
+    />
+    {location.name}
+  </button>
+))}
           </div>
         </div>
 
@@ -286,7 +312,7 @@ const Home = () => {
         </div>
 
         {/* Live Chat Support */}
-        <div className="fixed bottom-6 right-6 z-30">
+        {/* <div className="fixed bottom-6 right-6 z-30">
           <button className="group relative">
             <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full blur-lg opacity-75 group-hover:opacity-100 transition-opacity animate-pulse"></div>
             <div className="relative bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all group-hover:scale-110">
@@ -294,7 +320,7 @@ const Home = () => {
             </div>
             <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-ping"></span>
           </button>
-        </div>
+        </div> */}
 
         {/* FOOTER */}
         <footer className="mt-16 pt-8 border-t border-gray-200">
@@ -368,60 +394,50 @@ const Home = () => {
   );
 };
 
-const ProfessionalCard = ({ icon, title, index, onClick }) => {
-  const [isHovered, setIsHovered] = useState(false);
-
-  return (
-    <div
-      className="group relative"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={onClick}
-      style={{
-        animation: `fadeInScale 0.4s ease-out ${index * 0.05}s both`
-      }}
-    >
-      {/* Card */}
-      <div className={`
-        relative bg-white rounded-xl border border-gray-200 p-5
-        transition-all duration-300 cursor-pointer
-        ${isHovered 
-          ? 'border-blue-600 shadow-lg transform -translate-y-1' 
-          : 'hover:border-gray-300 hover:shadow-md'
-        }
-      `}>
-        {/* Icon Container */}
-        <div className="mb-3">
-          <div className={`
-            inline-flex p-2.5 rounded-lg transition-all duration-300
-            ${isHovered 
-              ? 'bg-blue-600/10 text-blue-600' 
-              : 'bg-gray-50 text-gray-600'
-            }
-          `}>
-            {React.cloneElement(icon, { 
-              className: "h-5 w-5 transition-transform duration-300 group-hover:scale-110" 
-            })}
+  const ProfessionalCard = ({ icon, title, index, onClick }) => {
+    return (
+      <div
+        className="relative group"
+        onClick={onClick}
+        style={{
+          animation: `fadeInScale 0.4s ease-out ${index * 0.05}s both`
+        }}
+      >
+        {/* Card */}
+       <div className="
+  relative bg-white rounded-xl p-5
+  border border-blue-500
+  shadow-sm
+  transition-all duration-300 cursor-pointer
+  group-hover:border-purple-600
+">
+          
+          {/* Icon */}
+          <div className="mb-3">
+            <div className="
+              inline-flex p-2.5 rounded-lg
+              bg-gray-50 text-gray-600
+              transition-all duration-300
+              group-hover:bg-blue-100 group-hover:text-blue-600
+            ">
+              {React.cloneElement(icon, {
+                className: "h-5 w-5 transition-transform duration-300 group-hover:scale-110"
+              })}
+            </div>
           </div>
+
+          {/* Title */}
+          <h4 className="
+            text-sm font-medium text-gray-700
+            transition-colors duration-300
+            group-hover:text-blue-600
+          ">
+            {title}
+          </h4>
+
         </div>
-
-        {/* Title */}
-        <h4 className={`
-          text-sm font-medium transition-colors duration-300
-          ${isHovered ? 'text-blue-600' : 'text-gray-700'}
-        `}>
-          {title}
-        </h4>
-
-        {/* Bottom indicator */}
-        <div className={`
-          absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-purple-600
-          transition-transform duration-300 origin-left
-          ${isHovered ? 'scale-x-100' : 'scale-x-0'}
-        `} />
       </div>
-    </div>
-  );
-};
+    );
+  };
 
 export default Home;
