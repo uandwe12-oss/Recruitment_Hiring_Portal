@@ -37,6 +37,9 @@ const Header = () => {
 
   // Check if user is Admin
   const isAdmin = role === "Admin";
+  
+  // Check if user is Interviewer
+  const isInterviewer = role === "Interviewer";
 
   return (
     <header className="w-full sticky top-0 z-50">
@@ -48,7 +51,7 @@ const Header = () => {
           {/* LEFT: Logo */}
           <div
             className="flex items-center gap-3 cursor-pointer"
-            onClick={() => navigate("/home")}
+            onClick={() => navigate(isInterviewer ? "/demand" : "/home")}
           >
             <img
               src={logo}
@@ -62,10 +65,16 @@ const Header = () => {
 
           {/* CENTER: Navigation */}
           <div className="hidden md:flex items-center gap-6">
+            {/* Show Home for everyone */}
             {navItem("Home", "/home")}
+            
+            {/* Show Demand for everyone */}
             {navItem("Demand", "/demand")}
-            {navItem("Recruiter", "/recruiter")}
-            {/* Show Create User link only for Admin */}
+            
+            {/* Show Recruiter only for non-Interviewer (Admin and Recruiter) */}
+            {!isInterviewer && navItem("Recruiter", "/recruiter")}
+            
+            {/* Show User only for Admin */}
             {isAdmin && navItem("User", "/create-user")}
           </div>
 
