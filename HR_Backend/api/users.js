@@ -13,7 +13,6 @@ const getDriver = require("../lib/neo4j");
 router.get("/", async (req, res) => {
   console.log("\n📡 GET /api/users - Fetching all users");
   
-  // Get driver and create session
   const driver = getDriver();
   const session = driver.session();
 
@@ -23,7 +22,8 @@ router.get("/", async (req, res) => {
     const result = await session.run(
       `MATCH (u:User)
        RETURN u.username as username, 
-              u.role as role, 
+              u.role as role,
+              u.assignedClient as assignedClient,
               u.createdAt as createdAt
        ORDER BY u.createdAt DESC`
     );
@@ -33,11 +33,13 @@ router.get("/", async (req, res) => {
     const users = result.records.map(record => {
       const username = record.get("username");
       const role = record.get("role");
+      const assignedClient = record.get("assignedClient");
       const createdAt = record.get("createdAt");
       
       return {
         username: username,
         role: role,
+        assignedClient: assignedClient || null,
         createdAt: createdAt ? new Date(createdAt).toISOString() : null
       };
     });
@@ -70,12 +72,11 @@ router.post("/", async (req, res) => {
   console.log("\n📡 POST /api/users - Creating new user");
   console.log("Request body:", { ...req.body, password: "[HIDDEN]" });
   
-  // Get driver and create session
   const driver = getDriver();
   const session = driver.session();
   
   try {
-    const { username, password, role } = req.body;
+    const { username, password, role, assignedClient } = req.body;
 
     if (!username || !password || !role) {
       return res.status(400).json({ 
@@ -101,6 +102,19 @@ router.post("/", async (req, res) => {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Prepare user data
+    const userData = {
+      username,
+      passwordHash,
+      role,
+      createdAt: new Date().toISOString()
+    };
+
+    // If role is Interviewer and assignedClient is provided, add it
+    if (role === "Interviewer" && assignedClient) {
+      userData.assignedClient = assignedClient;
+    }
+
     // Create user
     const result = await session.run(
       `
@@ -108,23 +122,27 @@ router.post("/", async (req, res) => {
         username: $username,
         passwordHash: $passwordHash,
         role: $role,
-        createdAt: datetime()
+        assignedClient: $assignedClient,
+        createdAt: datetime($createdAt)
       })
-      RETURN u.username as username, u.role as role, u.createdAt as createdAt
+      RETURN u.username as username, u.role as role, u.assignedClient as assignedClient, u.createdAt as createdAt
       `,
       {
         username,
         passwordHash,
-        role
+        role,
+        assignedClient: userData.assignedClient || null,
+        createdAt: userData.createdAt
       }
     );
 
     const createdUser = result.records[0];
     const createdUsername = createdUser.get("username");
     const createdRole = createdUser.get("role");
+    const createdClient = createdUser.get("assignedClient");
     const createdDate = createdUser.get("createdAt");
 
-    console.log(`✅ User created successfully: ${createdUsername}`);
+    console.log(`✅ User created successfully: ${createdUsername} (${createdRole})`);
 
     res.status(201).json({
       success: true,
@@ -132,6 +150,7 @@ router.post("/", async (req, res) => {
       user: {
         username: createdUsername,
         role: createdRole,
+        assignedClient: createdClient,
         createdAt: createdDate ? createdDate.toString() : null
       }
     });
@@ -156,7 +175,6 @@ router.post("/", async (req, res) => {
 router.put("/:username", async (req, res) => {
   console.log(`\n📡 PUT /api/users/${req.params.username} - Updating user`);
   
-  // Get driver and create session
   const driver = getDriver();
   const session = driver.session();
   const { username } = req.params;
@@ -233,7 +251,6 @@ router.put("/:username", async (req, res) => {
 router.delete("/:username", async (req, res) => {
   console.log(`\n📡 DELETE /api/users/${req.params.username} - Deleting user`);
   
-  // Get driver and create session
   const driver = getDriver();
   const session = driver.session();
   const { username } = req.params;
@@ -254,9 +271,6 @@ router.delete("/:username", async (req, res) => {
         message: "User not found" 
       });
     }
-
-    // Optional: Prevent deleting yourself
-    // You can add a check here if you want to prevent deleting the current user
 
     // Delete user
     await session.run(
