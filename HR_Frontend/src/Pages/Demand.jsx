@@ -46,10 +46,10 @@ const Demand = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [userRole, setUserRole] = useState(null);
+  const [userClientName, setUserClientName] = useState(null);
   const [statusChangeDesc, setStatusChangeDesc] = useState("");
   const [showStatusDesc, setShowStatusDesc] = useState(false);
   const [previousStatus, setPreviousStatus] = useState("");
-  const [assignedClient, setAssignedClient] = useState(null);
   // Status Edit Modal States
 const [showStatusEditModal, setShowStatusEditModal] = useState(false);
 const [selectedStatusCandidate, setSelectedStatusCandidate] = useState(null);
@@ -68,6 +68,7 @@ const [selectedHistoryCandidate, setSelectedHistoryCandidate] = useState(null);
   const [selectedDemandId, setSelectedDemandId] = useState(null);
   const [loadingSelected, setLoadingSelected] = useState(false);
   const [selectedDemandDetails, setSelectedDemandDetails] = useState(null);
+  
 
   const formDemand = isAdding
     ? newDemand
@@ -79,19 +80,14 @@ const [selectedHistoryCandidate, setSelectedHistoryCandidate] = useState(null);
 
 useEffect(() => {
   const user = JSON.parse(localStorage.getItem("user"));
-  console.log("🔍 User from localStorage:", user);
-  
   if (user) {
     setUserRole(user.role);
-    
-    // If role is Interviewer, use username as assigned client
-    if (user.role === "Interviewer") {
-      // Use username as the assigned client
-      setAssignedClient(user.username);
-      console.log("🔍 Interviewer assigned to client:", user.username);
+    // ADD THIS PART - store client name for Interviewer
+    if (user.role === "Interviewer" && user.clientName) {
+      setUserClientName(user.clientName);
+      console.log(`👤 Interviewer logged in - Client: ${user.clientName}`);
     }
   }
-  fetchDemands();
 }, []);
 
   const fetchDemands = async () => {
@@ -440,8 +436,6 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
     }
   };
 
-  
-
   useEffect(() => {
     fetchDemands();
   }, []);
@@ -461,38 +455,43 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
   };
 
   // First filter by status based on selection
-  const statusFilteredDemands = demands.filter((d) => {
-    if (sortBy === "active") {
-      return d.status === "Active";
-    }
-    if (sortBy === "fulfilled") {
-      return d.status === "Fulfilled";
-    }
-    if (sortBy === "closed") {
-      return d.status === "Closed";
-    }
-    if (sortBy === "cancelled") {
-      return d.status === "Cancelled";
-    }
-    if (sortBy === "all") {
-      return true; // Show all statuses
-    }
-    return true; // For priority/date sort, show all
-  });
-
-const filteredDemands = statusFilteredDemands.filter((d) => {
-  // If user is Interviewer, filter by assigned client
-  if (userRole === "Interviewer" && assignedClient) {
-    if (d.clientName !== assignedClient) {
-      return false;
-    }
+// First filter by status based on selection
+const statusFilteredDemands = demands.filter((d) => {
+  // First apply status filter
+  let statusMatch = true;
+  if (sortBy === "active") {
+    statusMatch = d.status === "Active";
+  } else if (sortBy === "fulfilled") {
+    statusMatch = d.status === "Fulfilled";
+  } else if (sortBy === "closed") {
+    statusMatch = d.status === "Closed";
+  } else if (sortBy === "cancelled") {
+    statusMatch = d.status === "Cancelled";
+  } else if (sortBy === "all") {
+    statusMatch = true;
   }
   
-  // Apply search filter
-  return `${d.clientName || ""} ${d.location || ""} ${(d.primarySkill || []).join(" ")} ${(d.secondarySkill || []).join(" ")}`
-    .toLowerCase()
-    .includes(searchTerm.toLowerCase());
+  // If status doesn't match, return false
+  if (!statusMatch) return false;
+  
+  // 👇 ADD THIS PART - Filter by client for Interviewer role
+  if (userRole === "Interviewer" && userClientName) {
+    // Interviewer can only see demands for their client
+    return d.clientName === userClientName;
+  }
+  
+  // Admin sees all demands
+  return true;
 });
+
+  // Then apply search filter
+  const filteredDemands = statusFilteredDemands.filter((d) =>
+    `${d.clientName || ""} ${d.location || ""} ${(d.primarySkill || []).join(
+      " "
+    )} ${(d.secondarySkill || []).join(" ")}`
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase())
+  );
 
   const sortedDemands = [...filteredDemands].sort((a, b) => {
     if (sortBy === "priority") {
@@ -528,182 +527,137 @@ const filteredDemands = statusFilteredDemands.filter((d) => {
     }
   };
 
-  const handleEditDemand = (demand) => {
-    // Make sure we have the latest demand data
-    const demandToEdit = demands.find(d => d.id === demand.id) || demand;
-    
-    setIsEditing(true);
-    setEditedDemand({ ...demandToEdit });
-    
-    // Load the latest reason from statusHistory if it exists
-    if (demandToEdit.statusHistory) {
-      let historyArray = demandToEdit.statusHistory;
-      if (typeof historyArray === 'string') {
-        try {
-          historyArray = JSON.parse(historyArray);
-        } catch (e) {
-          historyArray = [];
-        }
-      }
-      
-      if (Array.isArray(historyArray) && historyArray.length > 0) {
-        const latestHistory = historyArray[historyArray.length - 1];
-        // Only show reason if it's not a default message
-        if (latestHistory.reason && 
-            latestHistory.reason !== `Status changed from ${latestHistory.fromStatus} to ${latestHistory.toStatus}` && 
-            !latestHistory.reason.includes('Status changed from')) {
-          setStatusChangeDesc(latestHistory.reason);
-          setShowStatusDesc(true);
-        } else {
-          setStatusChangeDesc("");
-          setShowStatusDesc(false);
-        }
-      } else {
-        setStatusChangeDesc("");
-        setShowStatusDesc(false);
-      }
+const handleEditDemand = (demand) => {
+  // Make sure we have the latest demand data
+  const demandToEdit = demands.find(d => d.id === demand.id) || demand;
+  
+  setIsEditing(true);
+  setEditedDemand({ ...demandToEdit });
+  
+  // Load the reason from statusHistory (now stored as a simple string)
+  if (demandToEdit.statusHistory) {
+    const historyStr = demandToEdit.statusHistory;
+    if (typeof historyStr === 'string' && historyStr.trim() !== "") {
+      // Extract just the reason part (remove the " (by User on date)" part)
+      const reasonPart = historyStr.split(' (by')[0];
+      setStatusChangeDesc(reasonPart);
+      setShowStatusDesc(true);
     } else {
       setStatusChangeDesc("");
       setShowStatusDesc(false);
     }
-    
-    setPreviousStatus(demandToEdit.status || "Active");
-  };
+  } else {
+    setStatusChangeDesc("");
+    setShowStatusDesc(false);
+  }
+  
+  setPreviousStatus(demandToEdit.status || "Active");
+};
 
-  const handleSaveDemand = async () => {
-    // If we're in "add" mode, call create function
-    if (isAdding && newDemand) {
-      await handleCreateDemand();
+const handleSaveDemand = async () => {
+  // If we're in "add" mode, call create function
+  if (isAdding && newDemand) {
+    await handleCreateDemand();
+    return;
+  }
+
+  // Check if status is being changed and no description provided
+  if (!isAdding && editedDemand?.status !== previousStatus) {
+    if (!statusChangeDesc.trim()) {
+      alert("Please enter a reason for status change");
       return;
     }
+  }
 
-    // Check if status is being changed and no description provided
-    if (!isAdding && editedDemand?.status !== previousStatus) {
-      if (!statusChangeDesc.trim()) {
-        return;
-      }
-    }
+  // Otherwise, it's an edit
+  if (!editedDemand?.id) return;
 
-    // Otherwise, it's an edit
-    if (!editedDemand?.id) return;
+  try {
+    setIsSaving(true);
 
-    try {
-      setIsSaving(true);
-
-      // Create the updated demand object - exclude temporary fields
-      const { statusChangeReason, statusChangedBy, statusChangedDate, ...restDemand } = editedDemand;
-      const updatedDemand = { ...restDemand };
-
-      // Check if status has changed OR reason has been updated
-      const statusChanged = previousStatus && previousStatus !== editedDemand.status;
-      const reasonChanged = statusChangeDesc !== "" && statusChangeDesc !== (() => {
-        // Get the current reason from statusHistory if it exists
-        if (updatedDemand.statusHistory) {
-          let historyArray = updatedDemand.statusHistory;
-          if (typeof historyArray === 'string') {
-            try {
-              historyArray = JSON.parse(historyArray);
-            } catch (e) {
-              historyArray = [];
-            }
-          }
-          if (Array.isArray(historyArray) && historyArray.length > 0) {
-            return historyArray[historyArray.length - 1].reason || "";
-          }
-        }
-        return "";
-      })();
+    // Create the updated demand object
+    const updatedDemand = { ...editedDemand };
+    
+    // Get current user
+    const user = JSON.parse(localStorage.getItem("user")) || { name: "Unknown" };
+    
+    // Check if status has changed
+    const statusChanged = previousStatus && previousStatus !== editedDemand.status;
+    
+    if (statusChanged) {
+      // Status changed - store ONLY the reason as a simple string (not an array)
+      const reasonText = statusChangeDesc.trim() || `Status changed from ${previousStatus} to ${editedDemand.status}`;
       
-      if (statusChanged || reasonChanged) {
-        // Parse existing statusHistory if it exists
-        let existingHistory = [];
-        if (updatedDemand.statusHistory) {
-          if (typeof updatedDemand.statusHistory === 'string') {
-            try {
-              existingHistory = JSON.parse(updatedDemand.statusHistory);
-            } catch (e) {
-              existingHistory = [];
-            }
-          } else if (Array.isArray(updatedDemand.statusHistory)) {
-            existingHistory = [...updatedDemand.statusHistory];
-          }
-        }
-
-        if (statusChanged) {
-          // Status changed - create new history entry
-          const user = JSON.parse(localStorage.getItem("user")) || { name: "Unknown" };
-          const statusHistoryEntry = {
-            fromStatus: previousStatus,
-            toStatus: editedDemand.status,
-            reason: statusChangeDesc || `Status changed from ${previousStatus} to ${editedDemand.status}`,
-            changedBy: user.name || "Unknown",
-            changedDate: new Date().toISOString()
-          };
-          
-          // Add the new entry to history
-          existingHistory.push(statusHistoryEntry);
-        } else if (reasonChanged && existingHistory.length > 0) {
-          // Status didn't change but reason was updated - update the latest history entry
-          existingHistory[existingHistory.length - 1] = {
-            ...existingHistory[existingHistory.length - 1],
-            reason: statusChangeDesc,
-            changedDate: new Date().toISOString()
-          };
-        }
-        
-        // CRITICAL: Stringify the entire history array for Neo4j
-        updatedDemand.statusHistory = JSON.stringify(existingHistory);
+      // Store as a simple string with date and user info
+      updatedDemand.statusHistory = `${reasonText} (by ${user.name || "Unknown"} on ${new Date().toLocaleString()})`;
+      
+      console.log("📝 Status changed - storing reason:", updatedDemand.statusHistory);
+    } else if (statusChangeDesc !== "" && statusChangeDesc !== (() => {
+      // Check if reason was updated without status change
+      const currentHistory = updatedDemand.statusHistory;
+      if (currentHistory && typeof currentHistory === 'string') {
+        // Extract just the reason part (before the " (by" if it exists)
+        const reasonPart = currentHistory.split(' (by')[0];
+        return reasonPart;
       }
-
-      console.log("📝 Sending updated demand to backend:", JSON.stringify(updatedDemand, null, 2));
-
-      const response = await fetch(
-        `https://myuandwe-bg.vercel.app/api/demand/${editedDemand.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(updatedDemand),
-        }
-      );
-
-      const responseText = await response.text();
-      console.log("📡 Response from server:", responseText);
-
-      if (!response.ok) {
-        let errorMessage = `Server error: ${response.status}`;
-        try {
-          const errorData = JSON.parse(responseText);
-          errorMessage = errorData.message || errorData.error || errorMessage;
-        } catch (e) {
-          errorMessage = responseText || errorMessage;
-        }
-        throw new Error(errorMessage);
-      }
-
-      const result = JSON.parse(responseText);
-      console.log("✅ Update successful:", result);
-
-      // Refresh the demands list
-      await fetchDemands();
-
-      // Reset all edit-related states
-      setIsEditing(false);
-      setEditedDemand(null);
-      setShowStatusDesc(false);
-      setStatusChangeDesc("");
-      setPreviousStatus("");
-
-      // Close the popup
-      setSelectedDemand(null);
-
-    } catch (err) {
-      console.error("❌ Error updating demand:", err);
-    } finally {
-      setIsSaving(false);
+      return "";
+    })()) {
+      // Reason updated without status change - REPLACE with new reason
+      const newReasonText = statusChangeDesc.trim();
+      updatedDemand.statusHistory = `${newReasonText} (by ${user.name || "Unknown"} on ${new Date().toLocaleString()})`;
+      console.log("📝 Reason updated - replacing with:", updatedDemand.statusHistory);
     }
-  };
+
+    console.log("📝 Sending updated demand to backend:", JSON.stringify(updatedDemand, null, 2));
+
+    const response = await fetch(
+      `https://myuandwe-bg.vercel.app/api/demand/${editedDemand.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedDemand),
+      }
+    );
+
+    const responseText = await response.text();
+    console.log("📡 Response from server:", responseText);
+
+    if (!response.ok) {
+      let errorMessage = `Server error: ${response.status}`;
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      } catch (e) {
+        errorMessage = responseText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const result = JSON.parse(responseText);
+    console.log("✅ Update successful:", result);
+
+    // Refresh the demands list
+    await fetchDemands();
+
+    // Reset all edit-related states
+    setIsEditing(false);
+    setEditedDemand(null);
+    setShowStatusDesc(false);
+    setStatusChangeDesc("");
+    setPreviousStatus("");
+
+    // Close the popup
+    setSelectedDemand(null);
+
+  } catch (err) {
+    console.error("❌ Error updating demand:", err);
+    alert("Failed to update demand: " + err.message);
+  } finally {
+    setIsSaving(false);
+  }
+};
 
   const handleCancelEdit = () => {
     setIsEditing(false);
@@ -781,52 +735,58 @@ const filteredDemands = statusFilteredDemands.filter((d) => {
     }
   };
 
-  const handleViewCandidates = (demand) => {
-    if (!demand || !demand.id) {
-      return;
-    }
-    
-    // Get current user from localStorage
-    const user = JSON.parse(localStorage.getItem("user"));
-    
-    // Create a query string with the demand's requirements
-    const queryParams = new URLSearchParams();
-    
-    // Add primary skills
-    if (demand.primarySkill && demand.primarySkill.length > 0) {
-      queryParams.append('primarySkills', demand.primarySkill.join(','));
-    }
-    
-    // Add secondary skills
-    if (demand.secondarySkill && demand.secondarySkill.length > 0) {
-      queryParams.append('secondarySkills', demand.secondarySkill.join(','));
-    }
-    
-    // Add experience range
-    if (demand.expFrom) {
-      queryParams.append('minExperience', demand.expFrom);
-    }
-    if (demand.expTo) {
-      queryParams.append('maxExperience', demand.expTo);
-    }
-    
-    // Add a flag to indicate we want to auto-apply filters
-    queryParams.append('autoFilter', 'true');
-    
-    // Add demand ID
-    queryParams.append('demandId', demand.id);
-    
-    // Add user info to maintain session (optional, but good for debugging)
-    if (user) {
-      queryParams.append('userId', user.id);
-      queryParams.append('userRole', user.role);
-    }
-    
-    console.log("Navigating to recruiter with params:", queryParams.toString());
-    
-    // Navigate to recruiter page with query parameters
-    navigate(`/recruiter?${queryParams.toString()}`);
-  };
+const handleViewCandidates = (demand) => {
+  if (!demand || !demand.id) {
+    return;
+  }
+  
+  // Get current user from localStorage
+  const user = JSON.parse(localStorage.getItem("user"));
+  
+  // Create a query string with the demand's requirements
+  const queryParams = new URLSearchParams();
+  
+  // Add primary skills
+  if (demand.primarySkill && demand.primarySkill.length > 0) {
+    queryParams.append('primarySkills', demand.primarySkill.join(','));
+  }
+  
+  // Add secondary skills
+  if (demand.secondarySkill && demand.secondarySkill.length > 0) {
+    queryParams.append('secondarySkills', demand.secondarySkill.join(','));
+  }
+  
+  // Add experience range
+  if (demand.expFrom) {
+    queryParams.append('minExperience', demand.expFrom);
+  }
+  if (demand.expTo) {
+    queryParams.append('maxExperience', demand.expTo);
+  }
+  
+  // ✅ ADD THIS - Pass client name for Zone filtering
+  if (demand.clientName) {
+    queryParams.append('clientName', demand.clientName);
+    console.log(`🔍 Filtering out candidates in Zone for client: ${demand.clientName}`);
+  }
+  
+  // Add a flag to indicate we want to auto-apply filters
+  queryParams.append('autoFilter', 'true');
+  
+  // Add demand ID
+  queryParams.append('demandId', demand.id);
+  
+  // Add user info to maintain session
+  if (user) {
+    queryParams.append('userId', user.id);
+    queryParams.append('userRole', user.role);
+  }
+  
+  console.log("Navigating to recruiter with params:", queryParams.toString());
+  
+  // Navigate to recruiter page with query parameters
+  navigate(`/recruiter?${queryParams.toString()}`);
+};
 
   const handleAddButtonClick = () => {
     const user = JSON.parse(localStorage.getItem("user"));
@@ -917,10 +877,14 @@ const updateCandidateStatus = async (newStatus) => {
         <div className="p-6 max-w-[95%] mx-auto">
           {/* TITLE */}
           <div className="flex justify-between mb-6 bg-white shadow-md rounded-2xl p-4">
-            <div>
-              <h2 className="text-3xl font-bold">Demand Dashboard</h2>
-              <p className="text-gray-500">View all demand requirements</p>
-            </div>
+  <div>
+    <h2 className="text-3xl font-bold">Demand Dashboard</h2>
+    <p className="text-gray-500">
+      {userRole === "Interviewer" && userClientName 
+        ? `Showing demands for client: ${userClientName}` 
+        : "View all demand requirements"}
+    </p>
+  </div>
 
             <div className="flex gap-3 items-center">
               {/* Show ADD button only for Admin */}
@@ -1355,39 +1319,32 @@ const updateCandidateStatus = async (newStatus) => {
                     )}
                   </div>
 
-                  {/* Reason */}
-                  <div className="flex items-center gap-2">
-                    <MessageCircle size={16} />
-                    <b>Reason:</b>
-                    {(isEditing) ? (
-                      <input
-                        type="text"
-                        value={statusChangeDesc}
-                        onChange={(e) => setStatusChangeDesc(e.target.value)}
-                        className="ml-2 px-2 py-1 border rounded w-full"
-                        placeholder="Enter reason"
-                      />
-                    ) : (
-                      <span className="ml-2">
-                        {(() => {
-                          let historyArray = formDemand?.statusHistory;
-
-                          if (typeof historyArray === "string") {
-                            try {
-                              historyArray = JSON.parse(historyArray);
-                            } catch {
-                              historyArray = [];
-                            }
-                          }
-
-                          if (!Array.isArray(historyArray) || historyArray.length === 0) return "";
-
-                          const latestHistory = historyArray[historyArray.length - 1];
-                          return latestHistory.reason || "";
-                        })()}
-                      </span>
-                    )}
-                  </div>
+                 {/* Reason */}
+<div className="flex items-center gap-2">
+  <MessageCircle size={16} />
+  <b>Reason:</b>
+  {(isEditing) ? (
+    <input
+      type="text"
+      value={statusChangeDesc}
+      onChange={(e) => setStatusChangeDesc(e.target.value)}
+      className="ml-2 px-2 py-1 border rounded w-full"
+      placeholder="Enter reason"
+    />
+  ) : (
+    <span className="ml-2">
+      {(() => {
+        const history = formDemand?.statusHistory;
+        if (typeof history === 'string' && history.trim() !== "") {
+          // Extract just the reason part if the format includes metadata
+          const reasonPart = history.split(' (by')[0];
+          return reasonPart;
+        }
+        return "";
+      })()}
+    </span>
+  )}
+</div>
 
                   {/* Interviewer 2 */}
                   <div className="flex items-center gap-2">
@@ -1530,30 +1487,35 @@ const updateCandidateStatus = async (newStatus) => {
                   </div>
                 </div>
 
-              {/* ACTION BUTTONS */}
-<div className="mt-6 flex justify-center gap-4 pb-2">
-  {!isAdding && formDemand?.id && (
-    <>
-      {/* Show View Candidates button only for Admin and Recruiter (not for Interviewer) */}
-      {userRole !== "Interviewer" && (
-        <button
-          onClick={() => handleViewCandidates(formDemand)}
-          className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-lg"
-        >
-          <Search size={18} /> View Candidates
-        </button>
-      )}
-      
-      {/* View Selected button - Show for all roles */}
-      <button
-        onClick={() => handleViewSelectedCandidates(formDemand)}
-        className="flex items-center gap-2 px-8 py-3 bg-green-600 text-white rounded-full hover:bg-green-700 shadow-lg"
-      >
-        <Users size={18} /> View Selected ({selectedCandidates[formDemand.id]?.length || 0})
-      </button>
-    </>
-  )}
-</div>
+                {/* ACTION BUTTONS */}
+                <div className="mt-6 flex justify-center gap-4 pb-2">
+                  {!isAdding && formDemand?.id && (
+                    <>
+                      <button
+                        onClick={() => handleViewCandidates(formDemand)}
+                        className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-lg"
+                      >
+                        <Search size={18} /> View Candidates
+                      </button>
+                      
+                      <button
+                        onClick={() => handleViewSelectedCandidates(formDemand)}
+                        className="flex items-center gap-2 px-8 py-3 bg-green-600 text-white rounded-full hover:bg-green-700 shadow-lg"
+                      >
+                        <Users size={18} /> View Selected ({selectedCandidates[formDemand.id]?.length || 0})
+                      </button>
+                    </>
+                  )}
+
+                  {/* {(isEditing || isAdding) && (
+                    <button
+                      onClick={handleCancelEdit}
+                      className="flex items-center gap-2 px-8 py-3 bg-gray-600 text-white rounded-full hover:bg-gray-700 shadow-lg"
+                    >
+                      Cancel
+                    </button>
+                  )} */}
+                </div>
               </div> {/* Closes Scrollable Content Area */}
             </div> {/* Closes Main popup container */}
           </div> /* Closes POPUP wrapper div */
