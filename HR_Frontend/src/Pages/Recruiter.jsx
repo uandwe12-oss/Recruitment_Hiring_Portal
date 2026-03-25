@@ -3,6 +3,7 @@ import Header from "../components/Header";
 import { useLocation } from "react-router-dom";
 import bgImage from "../assets/Images/back.png";
 import { useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { 
   Search, 
   Mail, 
@@ -65,7 +66,7 @@ const Recruiter = ({ user }) => {
   const [successMessage, setSuccessMessage] = useState("");
   const [showSelectedView, setShowSelectedView] = useState(false);
   const [pdfFile, setPdfFile] = useState(null);
-  
+  const navigate = useNavigate();
   // Get user role from props
   const userRole = user?.role || "recruiter";
   
@@ -275,6 +276,60 @@ const processCandidate = (candidate) => {
     
     setSkillCounts(counts);
   };
+
+  // Add this function near the top of your Recruiter component, after all the useState declarations
+const validateMobileNumber = (value) => {
+  // Remove all non-digit characters temporarily for validation
+  const digitsOnly = value.replace(/\D/g, '');
+  
+  // Check if it's exactly 10 digits
+  if (digitsOnly.length === 10) {
+    return { isValid: true, formattedValue: digitsOnly };
+  }
+  
+  // If it's less than 10 digits, allow typing but show error
+  if (digitsOnly.length > 0 && digitsOnly.length < 10) {
+    return { isValid: false, formattedValue: digitsOnly, error: `Mobile number must be exactly 10 digits (currently ${digitsOnly.length})` };
+  }
+  
+  // If it's more than 10 digits, prevent further typing
+  if (digitsOnly.length > 10) {
+    return { isValid: false, formattedValue: digitsOnly.slice(0, 10), error: "Mobile number cannot exceed 10 digits" };
+  }
+  
+  return { isValid: true, formattedValue: value, error: null };
+};
+
+// Handle mobile input change with validation
+const handleMobileChange = (e, setterFunction, errorSetterFunction) => {
+  let value = e.target.value;
+  
+  // Remove any non-digit characters
+  const digitsOnly = value.replace(/\D/g, '');
+  
+  // Limit to 10 digits
+  const limitedDigits = digitsOnly.slice(0, 10);
+  
+  // Format with spaces for better readability (optional)
+  let formattedValue = limitedDigits;
+  if (limitedDigits.length >= 5) {
+    formattedValue = limitedDigits.slice(0, 5) + ' ' + limitedDigits.slice(5);
+  }
+  
+  // Update the form field
+  setterFunction(formattedValue);
+  
+  // Validate
+  if (limitedDigits.length === 10) {
+    errorSetterFunction(null);
+  } else if (limitedDigits.length > 0 && limitedDigits.length < 10) {
+    errorSetterFunction(`Mobile number must be exactly 10 digits (currently ${limitedDigits.length})`);
+  } else if (limitedDigits.length > 10) {
+    errorSetterFunction("Mobile number cannot exceed 10 digits");
+  } else {
+    errorSetterFunction(null);
+  }
+};
 
 // Add this function in Recruiter component
 const handleSubmitSelectedCandidates = async () => {
@@ -842,32 +897,39 @@ useEffect(() => {
     }
   };
 
-  // Validate edit form
-  const validateEditForm = async () => {
-    const errors = {};
-    
-    if (!editFormData.name?.trim()) {
-      errors.name = "Name is required";
-    }
-    
-    if (!editFormData.email?.trim()) {
-      errors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(editFormData.email)) {
-      errors.email = "Email is invalid";
-    }
-    
-    if (!editFormData.mobile?.trim()) {
-      errors.mobile = "Mobile number is required";
-    } else if (!/^[0-9+\-\s]{10,15}$/.test(editFormData.mobile)) {
-      errors.mobile = "Mobile number is invalid";
-    }
-    
-    if (editFormData.keySkills.length === 0) {
-      errors.keySkills = "At least one skill is required";
-    }
-    
-    return errors;
-  };
+// Validate edit form
+const validateEditForm = async () => {
+  const errors = {};
+  
+  if (!editFormData.name?.trim()) {
+    errors.name = "Name is required";
+  }
+  
+  if (!editFormData.email?.trim()) {
+    errors.email = "Email is required";
+  } else if (!/\S+@\S+\.\S+/.test(editFormData.email)) {
+    errors.email = "Email is invalid";
+  }
+  
+  // Mobile number validation - remove any spaces or special characters
+ if (!editFormData.mobile?.trim()) {
+  errors.mobile = "Mobile number is required";
+} else {
+  const mobileDigits = editFormData.mobile.replace(/\D/g, '');
+  if (mobileDigits.length !== 10 && mobileDigits.length !== 11) {
+    errors.mobile = "Mobile number must be 10 or 11 digits";
+  } else if (!/^\d{10,11}$/.test(mobileDigits)) {
+    errors.mobile = "Mobile number must contain only numbers";
+  }
+}
+
+  
+  if (editFormData.keySkills.length === 0) {
+    errors.keySkills = "At least one skill is required";
+  }
+  
+  return errors;
+};
 
   // Handle update profile
   const handleUpdateProfile = async () => {
@@ -1127,52 +1189,59 @@ useEffect(() => {
 const handleSelectCandidate = async (candidate, e) => {
   e.stopPropagation();
   
-  const isAlreadySelected = selectedCandidates.some(c => c.id === candidate.id);
+  const demandId = searchParams.get('demandId');
   
-  if (!isAlreadySelected) {
-    try {
-      const demandId = searchParams.get('demandId');
-      
-      if (!demandId) {
-        alert("Demand ID not found");
-        return;
-      }
-      
-      const user = JSON.parse(localStorage.getItem("user")) || {};
-      const selectedByName = user.username || user.name || 'Unknown';
-      
-      // Prepare candidate data with initial status
-      const candidateData = {
-        canId: candidate.canId || candidate.actualId || candidate.id,
-        status: 'Pending Screening' // Start with first pending status
-      };
-      
-      // Add to local state immediately
-      setSelectedCandidates(prev => [...prev, {
-        ...candidate,
-        status: 'Pending Screening'
-      }]);
-      
-      // Save to backend
-      const response = await axios.post(
-        `https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`,
-        {
-          candidates: [candidateData],
-          selectedBy: selectedByName
+  if (demandId) {
+    // Existing logic for when already in demand context
+    const isAlreadySelected = selectedCandidates.some(c => c.id === candidate.id);
+    
+    if (!isAlreadySelected) {
+      try {
+        const user = JSON.parse(localStorage.getItem("user")) || {};
+        const selectedByName = user.username || user.name || 'Unknown';
+        
+        const candidateData = {
+          canId: candidate.canId || candidate.actualId || candidate.id,
+          status: 'Pending Screening'
+        };
+        
+        setSelectedCandidates(prev => [...prev, {
+          ...candidate,
+          status: 'Pending Screening'
+        }]);
+        
+        const response = await axios.post(
+          `https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`,
+          {
+            candidates: [candidateData],
+            selectedBy: selectedByName
+          }
+        );
+        
+        if (response.data.success) {
+          setSuccessMessage(`✅ ${candidate.name} added to demand!`);
+          setTimeout(() => setSuccessMessage(""), 2000);
         }
-      );
-      
-      if (response.data.success) {
-        setSuccessMessage(`✅ ${candidate.name} added to demand!`);
-        setTimeout(() => setSuccessMessage(""), 2000);
+        
+      } catch (err) {
+        console.error('Error saving candidate:', err);
+        setSelectedCandidates(prev => prev.filter(c => c.id !== candidate.id));
+        setError(`Failed to save ${candidate.name}`);
+        setTimeout(() => setError(null), 3000);
       }
-      
-    } catch (err) {
-      console.error('Error saving candidate:', err);
-      setSelectedCandidates(prev => prev.filter(c => c.id !== candidate.id));
-      setError(`Failed to save ${candidate.name}`);
-      setTimeout(() => setError(null), 3000);
     }
+  } else {
+    // Navigate to demand page with candidate data
+    console.log("Navigating to demand page");
+    
+    // Store the selected candidate in sessionStorage (clears when tab closes, but persists across navigation)
+    sessionStorage.setItem('selectedCandidate', JSON.stringify({
+      ...candidate,
+      selectedAt: new Date().toISOString()
+    }));
+    
+    // Navigate to demand page
+    navigate('/demand');
   }
 };
 // Handle removing candidate from selection
@@ -1476,42 +1545,48 @@ const handleRemoveCandidate = async (candidateId, e) => {
     }));
   };
 
-  // Validate form fields
-  const validateForm = async () => {
-    const errors = {};
-    
-    if (!newProfile.name?.trim()) {
-      errors.name = "Name is required";
+// Validate form fields
+const validateForm = async () => {
+  const errors = {};
+  
+  if (!newProfile.name?.trim()) {
+    errors.name = "Name is required";
+  }
+  
+  if (!newProfile.email?.trim()) {
+    errors.email = "Email is required";
+  } else if (!/\S+@\S+\.\S+/.test(newProfile.email)) {
+    errors.email = "Email is invalid";
+  } else {
+    const emailExists = await checkEmailExists(newProfile.email);
+    if (emailExists) {
+      errors.email = "This email is already registered";
     }
-    
-    if (!newProfile.email?.trim()) {
-      errors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(newProfile.email)) {
-      errors.email = "Email is invalid";
-    } else {
-      const emailExists = await checkEmailExists(newProfile.email);
-      if (emailExists) {
-        errors.email = "This email is already registered";
-      }
+  }
+  
+ // Mobile number validation - allow 10 or 11 digits
+if (!newProfile.mobile?.trim()) {
+  errors.mobile = "Mobile number is required";
+} else {
+  const mobileDigits = newProfile.mobile.replace(/\D/g, '');
+  if (mobileDigits.length !== 10 && mobileDigits.length !== 11) {
+    errors.mobile = "Mobile number must be 10 or 11 digits";
+  } else if (!/^\d{10,11}$/.test(mobileDigits)) {
+    errors.mobile = "Mobile number must contain only numbers";
+  } else {
+    const mobileExists = await checkMobileExists(mobileDigits);
+    if (mobileExists) {
+      errors.mobile = "This mobile number is already registered";
     }
-    
-    if (!newProfile.mobile?.trim()) {
-      errors.mobile = "Mobile number is required";
-    } else if (!/^[0-9+\-\s]{10,15}$/.test(newProfile.mobile)) {
-      errors.mobile = "Mobile number is invalid";
-    } else {
-      const mobileExists = await checkMobileExists(newProfile.mobile);
-      if (mobileExists) {
-        errors.mobile = "This mobile number is already registered";
-      }
-    }
-    
-    if (newProfile.keySkills.length === 0) {
-      errors.keySkills = "At least one skill is required";
-    }
-    
-    return errors;
-  };
+  }
+}
+  
+  if (newProfile.keySkills.length === 0) {
+    errors.keySkills = "At least one skill is required";
+  }
+  
+  return errors;
+};
 
   // Handle adding new profile
   const handleAddProfile = async () => {
@@ -1968,6 +2043,22 @@ const isActiveStatus = (status) => {
   return activeStatuses.includes(status);
 };
 
+// Add this useEffect in Demand.jsx to check for selected candidate
+useEffect(() => {
+  const selectedCandidateData = sessionStorage.getItem('selectedCandidate');
+  if (selectedCandidateData) {
+    const candidate = JSON.parse(selectedCandidateData);
+    console.log("Selected candidate from recruiter:", candidate);
+    // You can show a message or pre-fill a form here
+    setSuccessMessage(`Candidate ${candidate.name} selected. Please create a demand for them.`);
+    // Clear the stored data after use
+    sessionStorage.removeItem('selectedCandidate');
+    
+    // Optional: Auto-open create demand form
+    // setShowCreateDemand(true);
+    // setCreateFormData(prev => ({ ...prev, candidateInfo: candidate }));
+  }
+}, []);
 
   // Add this useEffect to fetch existing selected candidates when component mounts
 useEffect(() => {
@@ -3352,25 +3443,69 @@ useEffect(() => {
                         />
                       </div>
 
-                      {/* Mobile Number */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Mobile Number <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="tel"
-                          name="mobile"
-                          value={newProfile.mobile}
-                          onChange={handleInputChange}
-                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            formErrors.mobile ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                          placeholder="Enter mobile number"
-                        />
-                        {formErrors.mobile && (
-                          <p className="text-red-500 text-xs mt-1">{formErrors.mobile}</p>
-                        )}
-                      </div>
+{/* Mobile Number */}
+<div>
+  <label className="block text-sm font-medium mb-1">
+    Mobile Number <span className="text-red-500">*</span>
+  </label>
+  <input
+    type="text"
+    name="mobile"
+    value={newProfile.mobile}
+    onChange={(e) => {
+      let value = e.target.value;
+      // Remove all non-digit characters
+      let digitsOnly = value.replace(/\D/g, '');
+      
+      // Allow up to 11 digits (supporting India - 10, China - 11, etc.)
+      if (digitsOnly.length > 11) {
+        digitsOnly = digitsOnly.slice(0, 11);
+      }
+      
+      // Store the digits
+      setNewProfile(prev => ({ ...prev, mobile: digitsOnly }));
+      
+      // Validation - allow 10 or 11 digits
+      if (digitsOnly.length === 10 || digitsOnly.length === 11) {
+        setFormErrors(prev => ({ ...prev, mobile: null }));
+      } else if (digitsOnly.length > 0 && digitsOnly.length < 10) {
+        setFormErrors(prev => ({ ...prev, mobile: `Mobile number must be 10 or 11 digits (currently ${digitsOnly.length})` }));
+      } else if (digitsOnly.length > 11) {
+        setFormErrors(prev => ({ ...prev, mobile: "Mobile number cannot exceed 11 digits" }));
+      } else {
+        setFormErrors(prev => ({ ...prev, mobile: null }));
+      }
+    }}
+    onKeyPress={(e) => {
+      // Get current digits count
+      const currentDigits = newProfile.mobile.replace(/\D/g, '');
+      
+      // If already 11 digits, prevent typing any more numbers
+      if (currentDigits.length >= 11 && /[0-9]/.test(e.key)) {
+        e.preventDefault();
+        return;
+      }
+      
+      // Allow only numbers
+      if (!/[0-9]/.test(e.key)) {
+        e.preventDefault();
+      }
+    }}
+    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono ${
+      formErrors.mobile ? 'border-red-500' : 'border-gray-300'
+    }`}
+    placeholder="Enter mobile number"
+  />
+  {formErrors.mobile && (
+    <p className="text-red-500 text-xs mt-1">{formErrors.mobile}</p>
+  )}
+  <p className="text-xs text-gray-400 mt-1">Only numbers allowed, 10 digits (India) or 11 digits (China)</p>
+  {newProfile.mobile && (newProfile.mobile.length === 10 || newProfile.mobile.length === 11) && (
+    <p className="text-xs text-green-600 mt-1">
+      Valid {newProfile.mobile.length}-digit number
+    </p>
+  )}
+</div>
                     </div>
 
                     {/* Right Column of Second Row */}
@@ -3681,508 +3816,592 @@ useEffect(() => {
           </div>
         )}
 
-        {/* EDIT PROFILE MODAL */}
-        {showEditModal && editingCandidate && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-8">
-              <div className="p-6">
-                {/* Modal Header */}
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h3 className="text-2xl font-bold">Edit Candidate Profile</h3>
-                    <p className="text-gray-500 text-sm">Update the candidate's information</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowEditModal(false);
-                      setEditingCandidate(null);
-                      setEditFormData({
-                        name: "",
-                        email: "",
-                        mobile: "",
-                        experience: "",
-                        currentOrg: "",
-                        currentCTC: "",
-                        expectedCTC: "",
-                        noticePeriod: "",
-                        profileSourcedBy: "",
-                        clientName: "",
-                        profileSubmissionDate: "",
-                        keySkills: [],
-                        visaType: "NA",
-                        resumePdf: null
-                      });
-                      setEditSkillInput("");
-                      setEditPdfFile(null);
-                      setEditFormErrors({});
-                    }}
-                    className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition"
-                  >
-                    <X size={24} />
-                  </button>
-                </div>
+     {/* EDIT PROFILE MODAL */}
+{showEditModal && editingCandidate && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-8">
+      <div className="p-6">
+        {/* Modal Header */}
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className="text-2xl font-bold">Edit Candidate Profile</h3>
+            <p className="text-gray-500 text-sm">
+              {userRole === 'Admin' 
+                ? '🔓 Full access - you can edit all fields' 
+                : '🔒 Limited access - CTC and Sourcing fields are restricted (Contact Admin)'}
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setShowEditModal(false);
+              setEditingCandidate(null);
+              setEditFormData({
+                name: "",
+                email: "",
+                mobile: "",
+                experience: "",
+                currentOrg: "",
+                currentCTC: "",
+                expectedCTC: "",
+                noticePeriod: "",
+                profileSourcedBy: "",
+                clientName: "",
+                profileSubmissionDate: "",
+                keySkills: [],
+                visaType: "NA",
+                resumePdf: null
+              });
+              setEditSkillInput("");
+              setEditPdfFile(null);
+              setEditFormErrors({});
+            }}
+            className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition"
+          >
+            <X size={24} />
+          </button>
+        </div>
 
-                {/* Success Message */}
-                {successMessage && (
-                  <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
-                    <CheckCircle size={20} className="text-green-500" />
-                    {successMessage}
-                  </div>
+        {/* Success Message */}
+        {successMessage && (
+          <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
+            <CheckCircle size={20} className="text-green-500" />
+            {successMessage}
+          </div>
+        )}
+
+        {/* Form Error */}
+        {editFormErrors.submit && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {editFormErrors.submit}
+          </div>
+        )}
+
+        <form onSubmit={(e) => { e.preventDefault(); handleUpdateProfile(); }}>
+          {/* FIRST ROW - Two Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Left Column */}
+            <div className="space-y-4">
+              {/* Client Name - Editable by both */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Client Name</label>
+                <input
+                  type="text"
+                  name="clientName"
+                  value={editFormData.clientName}
+                  onChange={handleEditInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Broadcom"
+                />
+              </div>
+
+              {/* Candidate Name - Editable by both */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Candidate Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  value={editFormData.name}
+                  onChange={handleEditInputChange}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    editFormErrors.name ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Enter full name"
+                />
+                {editFormErrors.name && (
+                  <p className="text-red-500 text-xs mt-1">{editFormErrors.name}</p>
                 )}
+              </div>
 
-                {/* Form Error */}
-                {editFormErrors.submit && (
-                  <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                    {editFormErrors.submit}
-                  </div>
+              {/* Email - Editable by both */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  value={editFormData.email}
+                  onChange={handleEditInputChange}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    editFormErrors.email ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Enter email address"
+                />
+                {editFormErrors.email && (
+                  <p className="text-red-500 text-xs mt-1">{editFormErrors.email}</p>
                 )}
+              </div>
 
-                <form onSubmit={(e) => { e.preventDefault(); handleUpdateProfile(); }}>
-                  {/* FIRST ROW - Two Columns */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Left Column */}
-                    <div className="space-y-4">
-                      {/* Client Name */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Client Name</label>
-                        <input
-                          type="text"
-                          name="clientName"
-                          value={editFormData.clientName}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="e.g., Broadcom"
-                        />
-                      </div>
+{/* Mobile Number */}
+<div>
+  <label className="block text-sm font-medium mb-1">
+    Mobile Number <span className="text-red-500">*</span>
+  </label>
+  <input
+    type="text"
+    name="mobile"
+    value={editFormData.mobile}
+    onChange={(e) => {
+      let value = e.target.value;
+      // Remove all non-digit characters
+      let digitsOnly = value.replace(/\D/g, '');
+      
+      // Allow up to 11 digits (supporting India - 10, China - 11, etc.)
+      if (digitsOnly.length > 11) {
+        digitsOnly = digitsOnly.slice(0, 11);
+      }
+      
+      // Store the digits
+      setEditFormData(prev => ({ ...prev, mobile: digitsOnly }));
+      
+      // Validation - allow 10 or 11 digits
+      if (digitsOnly.length === 10 || digitsOnly.length === 11) {
+        setEditFormErrors(prev => ({ ...prev, mobile: null }));
+      } else if (digitsOnly.length > 0 && digitsOnly.length < 10) {
+        setEditFormErrors(prev => ({ ...prev, mobile: `Mobile number must be 10 or 11 digits (currently ${digitsOnly.length})` }));
+      } else if (digitsOnly.length > 11) {
+        setEditFormErrors(prev => ({ ...prev, mobile: "Mobile number cannot exceed 11 digits" }));
+      } else {
+        setEditFormErrors(prev => ({ ...prev, mobile: null }));
+      }
+    }}
+    onKeyPress={(e) => {
+      // Get current digits count
+      const currentDigits = editFormData.mobile.replace(/\D/g, '');
+      
+      // If already 11 digits, prevent typing any more numbers
+      if (currentDigits.length >= 11 && /[0-9]/.test(e.key)) {
+        e.preventDefault();
+        return;
+      }
+      
+      // Allow only numbers
+      if (!/[0-9]/.test(e.key)) {
+        e.preventDefault();
+      }
+    }}
+    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono ${
+      editFormErrors.mobile ? 'border-red-500' : 'border-gray-300'
+    }`}
+    placeholder="Enter mobile number (10 or 11 digits)"
+  />
+  {editFormErrors.mobile && (
+    <p className="text-red-500 text-xs mt-1">{editFormErrors.mobile}</p>
+  )}
+  <p className="text-xs text-gray-400 mt-1">Only numbers allowed, 10 digits (India) or 11 digits (China)</p>
+  {editFormData.mobile && (editFormData.mobile.length === 10 || editFormData.mobile.length === 11) && (
+    <p className="text-xs text-green-600 mt-1">
+      Valid {editFormData.mobile.length}-digit number
+    </p>
+  )}
+</div>
+            </div>
 
-                      {/* Candidate Name */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Candidate Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          name="name"
-                          value={editFormData.name}
-                          onChange={handleEditInputChange}
-                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            editFormErrors.name ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                          placeholder="Enter full name"
-                        />
-                        {editFormErrors.name && (
-                          <p className="text-red-500 text-xs mt-1">{editFormErrors.name}</p>
-                        )}
-                      </div>
+            {/* Right Column */}
+            <div className="space-y-4">
+              {/* Current Organization - Editable by both */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Current Organization</label>
+                <input
+                  type="text"
+                  name="currentOrg"
+                  value={editFormData.currentOrg}
+                  onChange={handleEditInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Tech Mahindra"
+                />
+              </div>
 
-                      {/* Email */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Email <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="email"
-                          name="email"
-                          value={editFormData.email}
-                          onChange={handleEditInputChange}
-                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            editFormErrors.email ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                          placeholder="Enter email address"
-                        />
-                        {editFormErrors.email && (
-                          <p className="text-red-500 text-xs mt-1">{editFormErrors.email}</p>
-                        )}
-                      </div>
+              {/* Experience - Editable by both */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Experience</label>
+                <input
+                  type="text"
+                  name="experience"
+                  value={editFormData.experience}
+                  onChange={handleEditInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., 5 years"
+                />
+              </div>
 
-                      {/* Mobile Number */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Mobile Number <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="tel"
-                          name="mobile"
-                          value={editFormData.mobile}
-                          onChange={handleEditInputChange}
-                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            editFormErrors.mobile ? 'border-red-500' : 'border-gray-300'
-                          }`}
-                          placeholder="Enter mobile number"
-                        />
-                        {editFormErrors.mobile && (
-                          <p className="text-red-500 text-xs mt-1">{editFormErrors.mobile}</p>
-                        )}
-                      </div>
-                    </div>
+              {/* Current CTC - RESTRICTED: Only Admin can edit */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Current CTC
+                  {userRole !== 'Admin' && (
+                    <span className="ml-2 text-xs text-red-500">(Contact Admin)</span>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  name="currentCTC"
+                  value={editFormData.currentCTC}
+                  onChange={handleEditInputChange}
+                  disabled={userRole !== 'Admin'}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    userRole !== 'Admin' 
+                      ? 'bg-gray-100 cursor-not-allowed border-gray-200' 
+                      : 'border-gray-300'
+                  }`}
+                  placeholder="e.g., 12LPA"
+                  title={userRole !== 'Admin' ? 'Only Admin can edit this field' : ''}
+                />
+               
+              </div>
 
-                    {/* Right Column */}
-                    <div className="space-y-4">
-                      {/* Current Organization */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Current Organization</label>
-                        <input
-                          type="text"
-                          name="currentOrg"
-                          value={editFormData.currentOrg}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="e.g., Tech Mahindra"
-                        />
-                      </div>
-
-                      {/* Experience */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Experience</label>
-                        <input
-                          type="text"
-                          name="experience"
-                          value={editFormData.experience}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="e.g., 5 years"
-                        />
-                      </div>
-
-                      {/* Current CTC */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Current CTC</label>
-                        <input
-                          type="text"
-                          name="currentCTC"
-                          value={editFormData.currentCTC}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="e.g., 12LPA"
-                        />
-                      </div>
-
-                      {/* Expected CTC */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Expected CTC</label>
-                        <input
-                          type="text"
-                          name="expectedCTC"
-                          value={editFormData.expectedCTC}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="e.g., 18LPA"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* SECOND ROW - Two Columns */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                    {/* Left Column of Second Row */}
-                    <div className="space-y-4">
-                      {/* Notice Period */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Notice Period</label>
-                        <input
-                          type="text"
-                          name="noticePeriod"
-                          value={editFormData.noticePeriod}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="e.g., 2 months"
-                        />
-                      </div>
-
-                      {/* Profile Sourced By */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Profile Sourced By</label>
-                        <input
-                          type="text"
-                          name="profileSourcedBy"
-                          value={editFormData.profileSourcedBy}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="e.g., Swathi - Linkedin"
-                        />
-                      </div>
-
-                      {/* Visa Type */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Visa Type</label>
-                        <select
-                          name="visaType"
-                          value={editFormData.visaType}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="NA">NA</option>
-                          <option value="H1B">H1B</option>
-                          <option value="L1">L1</option>
-                          <option value="Green Card">Green Card</option>
-                          <option value="Citizen">Citizen</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Right Column of Second Row */}
-                    <div className="space-y-4">
-                      {/* Profile Submission Date - with DatePicker */}
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Profile Submission Date</label>
-                        <div className="w-full">
-                          <DatePicker
-                            selected={editProfileSubmissionDate}
-                            onChange={(date) => setEditProfileSubmissionDate(date)}
-                            dateFormat="dd-MMM-yy"
-                            placeholderText="Select date"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            maxDate={new Date()}
-                            showMonthDropdown
-                            showYearDropdown
-                            dropdownMode="select"
-                            wrapperClassName="w-full"
-                          />
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {editProfileSubmissionDate ? `Selected: ${editProfileSubmissionDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}` : 'Keep existing date if not changed'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Key Skills Section - Full Width */}
-                  <div className="mt-6 w-full">
-                    <label className="block text-sm font-medium mb-2">
-                      Key Skills <span className="text-red-500">*</span>
-                    </label>
-                    
-                    {/* Skill Input with Suggestions and Tags Inside */}
-                    <div className="relative w-full">
-                      <div className="flex flex-wrap items-center gap-1 p-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 min-h-[42px]">
-                        {/* Display selected skills as tags inside the input */}
-                        {editFormData.keySkills.map((skill, index) => (
-                          <span
-                            key={`edit-skill-tag-${index}`}
-                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
-                          >
-                            {skill}
-                            <button
-                              type="button"
-                              onClick={() => handleEditSkillRemove(skill)}
-                              className="hover:text-blue-600 focus:outline-none"
-                            >
-                              <X size={14} />
-                            </button>
-                          </span>
-                        ))}
-                        
-                        {/* Input field for new skills */}
-                        <input
-                          type="text"
-                          value={editSkillInput}
-                          onChange={handleEditSkillInputChange}
-                          onKeyDown={handleEditSkillKeyDown}
-                          placeholder={editFormData.keySkills.length === 0 ? "Enter a skill and press Enter (use comma for multiple)" : ""}
-                          className="flex-1 min-w-[150px] outline-none bg-transparent"
-                        />
-                      </div>
-                      
-                      {/* Add Button */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (editSkillInput.trim()) {
-                            const input = editSkillInput.trim();
-                            
-                            if (input.includes(',')) {
-                              const skills = input.split(',').map(s => s.trim()).filter(s => s);
-                              let invalidSkills = [];
-                              
-                              skills.forEach(s => {
-                                const skillExists = skillSuggestions.some(
-                                  existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
-                                );
-                                if (!skillExists) {
-                                  invalidSkills.push(s);
-                                }
-                              });
-                              
-                              if (invalidSkills.length > 0) {
-                                alert(`The following skills are not in the database: ${invalidSkills.join(', ')}. Only skills from the database can be added.`);
-                              } else {
-                                skills.forEach(s => {
-                                  if (!editFormData.keySkills.includes(s)) {
-                                    setEditFormData(prev => ({
-                                      ...prev,
-                                      keySkills: [...prev.keySkills, s]
-                                    }));
-                                  }
-                                });
-                                
-                                if (editFormErrors.keySkills) {
-                                  setEditFormErrors(prev => ({ ...prev, keySkills: null }));
-                                }
-                                
-                                setEditSkillInput("");
-                                setShowEditSkillSuggestions(false);
-                                setSelectedEditSkillSuggestionIndex(0);
-                              }
-                            } else {
-                              const skillExists = skillSuggestions.some(
-                                existingSkill => existingSkill.toLowerCase() === input.toLowerCase()
-                              );
-                              
-                              if (skillExists) {
-                                if (!editFormData.keySkills.includes(input)) {
-                                  setEditFormData(prev => ({
-                                    ...prev,
-                                    keySkills: [...prev.keySkills, input]
-                                  }));
-                                }
-                                
-                                if (editFormErrors.keySkills) {
-                                  setEditFormErrors(prev => ({ ...prev, keySkills: null }));
-                                }
-                                
-                                setEditSkillInput("");
-                                setShowEditSkillSuggestions(false);
-                                setSelectedEditSkillSuggestionIndex(0);
-                              } else {
-                                alert(`"${input}" is not in the skills database. Only skills from the database can be added.`);
-                              }
-                            }
-                          }
-                        }}
-                        disabled={!editSkillInput.trim()}
-                        className="absolute right-2 top-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                      >
-                        Add
-                      </button>
-                      
-                      {/* Edit Skill Suggestions Dropdown */}
-                      {showEditSkillSuggestions && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                          {filteredEditSkillSuggestions.length > 0 ? (
-                            filteredEditSkillSuggestions.map((skill, index) => (
-                              <div
-                                key={`edit-skill-suggestion-${skill}`}
-                                onClick={() => {
-                                  handleEditSkillAdd(skill);
-                                }}
-                                className={`px-3 py-2 cursor-pointer text-sm ${
-                                  index === selectedEditSkillSuggestionIndex 
-                                    ? 'bg-blue-100 text-blue-700' 
-                                    : 'hover:bg-blue-50'
-                                }`}
-                              >
-                                {skill}
-                              </div>
-                            ))
-                          ) : (
-                            <div className="px-3 py-4 text-center">
-                              <p className="text-sm text-gray-500 mb-2">
-                                "{editSkillInput.split(',').pop().trim()}" is not in the skills list
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                Only skills from the database can be added
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Skills Error */}
-                    {editFormErrors.keySkills && (
-                      <p className="text-red-500 text-xs mt-2">{editFormErrors.keySkills}</p>
-                    )}
-                  </div>
-
-                  {/* PDF Upload Section */}
-                  <div className="mt-6">
-                    <label className="block text-sm font-medium mb-2">Upload Resume (PDF)</label>
-                    <div className="flex items-center gap-4">
-                      <label className="flex-1 cursor-pointer">
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 transition">
-                          <input
-                            type="file"
-                            accept=".pdf,application/pdf"
-                            onChange={handleEditPdfUpload}
-                            className="hidden"
-                          />
-                          <Upload className="mx-auto h-8 w-8 text-gray-400" />
-                          <p className="mt-1 text-sm text-gray-500">
-                            {editPdfFile ? editPdfFile.name : editingCandidate?.resumePath ? "Replace existing resume" : "Click to upload PDF"}
-                          </p>
-                        </div>
-                      </label>
-                      {editPdfFile && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditPdfFile(null);
-                            setEditFormData(prev => ({ ...prev, resumePdf: null }));
-                          }}
-                          className="p-2 text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 justify-end mt-8">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowEditModal(false);
-                        setEditingCandidate(null);
-                        setEditFormData({
-                          name: "",
-                          email: "",
-                          mobile: "",
-                          experience: "",
-                          currentOrg: "",
-                          currentCTC: "",
-                          expectedCTC: "",
-                          noticePeriod: "",
-                          profileSourcedBy: "",
-                          clientName: "",
-                          profileSubmissionDate: "",
-                          keySkills: [],
-                          visaType: "NA",
-                          resumePdf: null
-                        });
-                        setEditSkillInput("");
-                        setEditPdfFile(null);
-                        setEditFormErrors({});
-                      }}
-                      className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                      disabled={editLoading}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={editLoading}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {editLoading ? (
-                        <>
-                          <Loader size={18} className="animate-spin" />
-                          Updating...
-                        </>
-                      ) : (
-                        <>
-                          <Save size={18} />
-                          Update Profile
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
+              {/* Expected CTC - RESTRICTED: Only Admin can edit */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Expected CTC
+                  {userRole !== 'Admin' && (
+                    <span className="ml-2 text-xs text-red-500">(Contact Admin)</span>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  name="expectedCTC"
+                  value={editFormData.expectedCTC}
+                  onChange={handleEditInputChange}
+                  disabled={userRole !== 'Admin'}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    userRole !== 'Admin' 
+                      ? 'bg-gray-100 cursor-not-allowed border-gray-200' 
+                      : 'border-gray-300'
+                  }`}
+                  placeholder="e.g., 18LPA"
+                  title={userRole !== 'Admin' ? 'Only Admin can edit this field' : ''}
+                />
+               
               </div>
             </div>
           </div>
-        )} 
+
+          {/* SECOND ROW - Two Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            {/* Left Column of Second Row */}
+            <div className="space-y-4">
+              {/* Notice Period - Editable by both */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Notice Period</label>
+                <input
+                  type="text"
+                  name="noticePeriod"
+                  value={editFormData.noticePeriod}
+                  onChange={handleEditInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., 2 months"
+                />
+              </div>
+
+              {/* Profile Sourced By - RESTRICTED: Only Admin can edit */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Profile Sourced By
+                  {userRole !== 'Admin' && (
+                    <span className="ml-2 text-xs text-red-500">(Contact Admin)</span>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  name="profileSourcedBy"
+                  value={editFormData.profileSourcedBy}
+                  onChange={handleEditInputChange}
+                  disabled={userRole !== 'Admin'}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    userRole !== 'Admin' 
+                      ? 'bg-gray-100 cursor-not-allowed border-gray-200' 
+                      : 'border-gray-300'
+                  }`}
+                  placeholder="e.g., Swathi - Linkedin"
+                  title={userRole !== 'Admin' ? 'Only Admin can edit this field' : ''}
+                />
+               
+              </div>
+
+              {/* Visa Type - Editable by both */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Visa Type</label>
+                <select
+                  name="visaType"
+                  value={editFormData.visaType}
+                  onChange={handleEditInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="NA">NA</option>
+                  <option value="H1B">H1B</option>
+                  <option value="L1">L1</option>
+                  <option value="Green Card">Green Card</option>
+                  <option value="Citizen">Citizen</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Right Column of Second Row */}
+            <div className="space-y-4">
+              {/* Profile Submission Date - Editable by both */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Profile Submission Date</label>
+                <div className="w-full">
+                  <DatePicker
+                    selected={editProfileSubmissionDate}
+                    onChange={(date) => setEditProfileSubmissionDate(date)}
+                    dateFormat="dd-MMM-yy"
+                    placeholderText="Select date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    maxDate={new Date()}
+                    showMonthDropdown
+                    showYearDropdown
+                    dropdownMode="select"
+                    wrapperClassName="w-full"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {editProfileSubmissionDate ? `Selected: ${editProfileSubmissionDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}` : 'Keep existing date if not changed'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Key Skills Section - Full Width (Editable by both) */}
+          <div className="mt-6 w-full">
+            <label className="block text-sm font-medium mb-2">
+              Key Skills <span className="text-red-500">*</span>
+            </label>
+            
+            {/* Skill Input with Suggestions and Tags Inside */}
+            <div className="relative w-full">
+              <div className="flex flex-wrap items-center gap-1 p-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 min-h-[42px]">
+                {/* Display selected skills as tags inside the input */}
+                {editFormData.keySkills.map((skill, index) => (
+                  <span
+                    key={`edit-skill-tag-${index}`}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
+                  >
+                    {skill}
+                    <button
+                      type="button"
+                      onClick={() => handleEditSkillRemove(skill)}
+                      className="hover:text-blue-600 focus:outline-none"
+                    >
+                      <X size={14} />
+                    </button>
+                  </span>
+                ))}
+                
+                {/* Input field for new skills */}
+                <input
+                  type="text"
+                  value={editSkillInput}
+                  onChange={handleEditSkillInputChange}
+                  onKeyDown={handleEditSkillKeyDown}
+                  placeholder={editFormData.keySkills.length === 0 ? "Enter a skill and press Enter (use comma for multiple)" : ""}
+                  className="flex-1 min-w-[150px] outline-none bg-transparent"
+                />
+              </div>
+              
+              {/* Add Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (editSkillInput.trim()) {
+                    const input = editSkillInput.trim();
+                    
+                    if (input.includes(',')) {
+                      const skills = input.split(',').map(s => s.trim()).filter(s => s);
+                      let invalidSkills = [];
+                      
+                      skills.forEach(s => {
+                        const skillExists = skillSuggestions.some(
+                          existingSkill => existingSkill.toLowerCase() === s.toLowerCase()
+                        );
+                        if (!skillExists) {
+                          invalidSkills.push(s);
+                        }
+                      });
+                      
+                      if (invalidSkills.length > 0) {
+                        alert(`The following skills are not in the database: ${invalidSkills.join(', ')}. Only skills from the database can be added.`);
+                      } else {
+                        skills.forEach(s => {
+                          if (!editFormData.keySkills.includes(s)) {
+                            setEditFormData(prev => ({
+                              ...prev,
+                              keySkills: [...prev.keySkills, s]
+                            }));
+                          }
+                        });
+                        
+                        if (editFormErrors.keySkills) {
+                          setEditFormErrors(prev => ({ ...prev, keySkills: null }));
+                        }
+                        
+                        setEditSkillInput("");
+                        setShowEditSkillSuggestions(false);
+                        setSelectedEditSkillSuggestionIndex(0);
+                      }
+                    } else {
+                      const skillExists = skillSuggestions.some(
+                        existingSkill => existingSkill.toLowerCase() === input.toLowerCase()
+                      );
+                      
+                      if (skillExists) {
+                        if (!editFormData.keySkills.includes(input)) {
+                          setEditFormData(prev => ({
+                            ...prev,
+                            keySkills: [...prev.keySkills, input]
+                          }));
+                        }
+                        
+                        if (editFormErrors.keySkills) {
+                          setEditFormErrors(prev => ({ ...prev, keySkills: null }));
+                        }
+                        
+                        setEditSkillInput("");
+                        setShowEditSkillSuggestions(false);
+                        setSelectedEditSkillSuggestionIndex(0);
+                      } else {
+                        alert(`"${input}" is not in the skills database. Only skills from the database can be added.`);
+                      }
+                    }
+                  }
+                }}
+                disabled={!editSkillInput.trim()}
+                className="absolute right-2 top-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                Add
+              </button>
+              
+              {/* Edit Skill Suggestions Dropdown */}
+              {showEditSkillSuggestions && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {filteredEditSkillSuggestions.length > 0 ? (
+                    filteredEditSkillSuggestions.map((skill, index) => (
+                      <div
+                        key={`edit-skill-suggestion-${skill}`}
+                        onClick={() => {
+                          handleEditSkillAdd(skill);
+                        }}
+                        className={`px-3 py-2 cursor-pointer text-sm ${
+                          index === selectedEditSkillSuggestionIndex 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'hover:bg-blue-50'
+                        }`}
+                      >
+                        {skill}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="px-3 py-4 text-center">
+                      <p className="text-sm text-gray-500 mb-2">
+                        "{editSkillInput.split(',').pop().trim()}" is not in the skills list
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Only skills from the database can be added
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Skills Error */}
+            {editFormErrors.keySkills && (
+              <p className="text-red-500 text-xs mt-2">{editFormErrors.keySkills}</p>
+            )}
+          </div>
+
+          {/* PDF Upload Section (Editable by both) */}
+          <div className="mt-6">
+            <label className="block text-sm font-medium mb-2">Upload Resume (PDF)</label>
+            <div className="flex items-center gap-4">
+              <label className="flex-1 cursor-pointer">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 transition">
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={handleEditPdfUpload}
+                    className="hidden"
+                  />
+                  <Upload className="mx-auto h-8 w-8 text-gray-400" />
+                  <p className="mt-1 text-sm text-gray-500">
+                    {editPdfFile ? editPdfFile.name : editingCandidate?.resumePath ? "Replace existing resume" : "Click to upload PDF"}
+                  </p>
+                </div>
+              </label>
+              {editPdfFile && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditPdfFile(null);
+                    setEditFormData(prev => ({ ...prev, resumePdf: null }));
+                  }}
+                  className="p-2 text-red-500 hover:text-red-700"
+                >
+                  <Trash2 size={20} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 justify-end mt-8">
+            <button
+              type="button"
+              onClick={() => {
+                setShowEditModal(false);
+                setEditingCandidate(null);
+                setEditFormData({
+                  name: "",
+                  email: "",
+                  mobile: "",
+                  experience: "",
+                  currentOrg: "",
+                  currentCTC: "",
+                  expectedCTC: "",
+                  noticePeriod: "",
+                  profileSourcedBy: "",
+                  clientName: "",
+                  profileSubmissionDate: "",
+                  keySkills: [],
+                  visaType: "NA",
+                  resumePdf: null
+                });
+                setEditSkillInput("");
+                setEditPdfFile(null);
+                setEditFormErrors({});
+              }}
+              className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+              disabled={editLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={editLoading}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {editLoading ? (
+                <>
+                  <Loader size={18} className="animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Save size={18} />
+                  Update Profile
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+)}
 
         {/* DELETE CONFIRMATION MODAL */}
         {showDeleteConfirm && (
