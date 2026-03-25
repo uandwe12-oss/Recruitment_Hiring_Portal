@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import Header from "../components/Header";
 import bgImage from "../assets/Images/back.png";
-import { UserPlus, Save, X, Trash2, Edit2, Search } from "lucide-react";
+import { UserPlus, Save, X, Trash2, Edit2, Search, Building2 } from "lucide-react";
 
 const CreateUser = () => {
   const [formData, setFormData] = useState({
     username: "",
     password: "",
-    role: "HR"
+    role: "Recruiter",
+    assignedClient: ""
   });
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -15,6 +16,13 @@ const CreateUser = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [apiStatus, setApiStatus] = useState({ checking: true, online: false });
+  
+  // State for clients list from demands
+  const [clients, setClients] = useState([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [filteredClients, setFilteredClients] = useState([]);
 
   // Check if backend is reachable
   useEffect(() => {
@@ -36,8 +44,21 @@ const CreateUser = () => {
   useEffect(() => {
     if (apiStatus.online) {
       fetchUsers();
+      fetchClients(); // Fetch clients when backend is online
     }
   }, [apiStatus.online]);
+
+  // Filter clients based on search term
+  useEffect(() => {
+    if (clientSearchTerm.trim()) {
+      const filtered = clients.filter(client => 
+        client.name.toLowerCase().includes(clientSearchTerm.toLowerCase())
+      );
+      setFilteredClients(filtered);
+    } else {
+      setFilteredClients(clients);
+    }
+  }, [clientSearchTerm, clients]);
 
   const fetchUsers = async () => {
     try {
@@ -45,12 +66,10 @@ const CreateUser = () => {
       const response = await fetch("https://myuandwe-bg.vercel.app/api/users");
       console.log("📡 Response status:", response.status);
       
-      // Check if response is OK
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      // Check if response is JSON
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
@@ -74,11 +93,50 @@ const CreateUser = () => {
     }
   };
 
+  // Fetch unique client names from demands
+  const fetchClients = async () => {
+    try {
+      setClientsLoading(true);
+      console.log("📡 Fetching client names from demands...");
+      const response = await fetch("https://myuandwe-bg.vercel.app/api/demand/clients/list");
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("📡 Clients response:", data);
+      
+      if (data.success) {
+        setClients(data.clients);
+        setFilteredClients(data.clients);
+      } else {
+        console.error("Failed to fetch clients:", data.message);
+      }
+    } catch (err) {
+      console.error("❌ Error fetching clients:", err);
+    } finally {
+      setClientsLoading(false);
+    }
+  };
+
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
+    
+    // Reset assigned client when role changes from Interviewer to something else
+    if (name === "role" && value !== "Interviewer") {
+      setFormData(prev => ({ ...prev, assignedClient: "" }));
+    }
+  };
+
+  const handleClientSelect = (clientName) => {
+    setFormData(prev => ({ ...prev, assignedClient: clientName }));
+    setClientSearchTerm(clientName);
+    setShowClientDropdown(false);
   };
 
   const handleSubmit = async (e) => {
@@ -87,15 +145,26 @@ const CreateUser = () => {
     setMessage({ type: "", text: "" });
 
     try {
+      // Prepare data for API
+      const submitData = {
+        username: formData.username,
+        password: formData.password,
+        role: formData.role
+      };
+      
+      // If role is Interviewer, include assignedClient
+      if (formData.role === "Interviewer" && formData.assignedClient) {
+        submitData.assignedClient = formData.assignedClient;
+      }
+
       const response = await fetch("https://myuandwe-bg.vercel.app/api/users", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(submitData),
       });
 
-      // Check if response is JSON
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
@@ -112,8 +181,10 @@ const CreateUser = () => {
       setFormData({
         username: "",
         password: "",
-        role: "HR"
+        role: "Recruiter",
+        assignedClient: ""
       });
+      setClientSearchTerm("");
       
       // Refresh user list
       fetchUsers();
@@ -128,9 +199,13 @@ const CreateUser = () => {
     setEditingUser(user);
     setFormData({
       username: user.username,
-      password: "", // Don't populate password for security
-      role: user.role
+      password: "",
+      role: user.role,
+      assignedClient: user.assignedClient || ""
     });
+    if (user.assignedClient) {
+      setClientSearchTerm(user.assignedClient);
+    }
   };
 
   const handleUpdate = async (e) => {
@@ -139,7 +214,9 @@ const CreateUser = () => {
     setMessage({ type: "", text: "" });
 
     try {
-      const response = await fetch(`https://myuandwe-bg.vercel.app/api/users/${editingUser.username}`, {
+      console.log(`Updating user ${editingUser.username} to role: ${formData.role}`);
+      
+      const response = await fetch(`https://myuandwe-bg.vercel.app/api/users/${encodeURIComponent(editingUser.username)}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -147,7 +224,6 @@ const CreateUser = () => {
         body: JSON.stringify({ role: formData.role }),
       });
 
-      // Check if response is JSON
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
@@ -165,12 +241,16 @@ const CreateUser = () => {
       setFormData({
         username: "",
         password: "",
-        role: "HR"
+        role: "Recruiter",
+        assignedClient: ""
       });
+      setClientSearchTerm("");
       
       // Refresh user list
-      fetchUsers();
+      await fetchUsers();
+      
     } catch (err) {
+      console.error("Error updating user:", err);
       setMessage({ type: "error", text: err.message });
     } finally {
       setLoading(false);
@@ -183,11 +263,10 @@ const CreateUser = () => {
     }
 
     try {
-      const response = await fetch(`https://myuandwe-bg.vercel.app/api/users/${username}`, {
+      const response = await fetch(`https://myuandwe-bg.vercel.app/api/users/${encodeURIComponent(username)}`, {
         method: "DELETE",
       });
 
-      // Check if response is JSON
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
@@ -203,7 +282,7 @@ const CreateUser = () => {
       setMessage({ type: "success", text: "User deleted successfully!" });
       
       // Refresh user list
-      fetchUsers();
+      await fetchUsers();
     } catch (err) {
       setMessage({ type: "error", text: err.message });
     }
@@ -214,15 +293,31 @@ const CreateUser = () => {
     setFormData({
       username: "",
       password: "",
-      role: "HR"
+      role: "Recruiter",
+      assignedClient: ""
     });
+    setClientSearchTerm("");
   };
 
   // Filter users based on search
   const filteredUsers = users.filter(user => 
     user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.role.toLowerCase().includes(searchTerm.toLowerCase())
+    user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (user.assignedClient && user.assignedClient.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  // Helper function to get role badge color
+  const getRoleBadgeClass = (role) => {
+    if (role === "Admin") {
+      return "bg-purple-100 text-purple-700";
+    } else if (role === "Recruiter") {
+      return "bg-blue-100 text-blue-700";
+    } else if (role === "Interviewer") {
+      return "bg-green-100 text-green-700";
+    } else {
+      return "bg-gray-100 text-gray-700";
+    }
+  };
 
   // Show backend status
   if (apiStatus.checking) {
@@ -353,21 +448,80 @@ const CreateUser = () => {
                     onChange={handleChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 outline-none"
                   >
-                    <option value="HR">HR (Can only view)</option>
+                    <option value="Recruiter">Recruiter (Can view and manage candidates)</option>
+                    <option value="Interviewer">Interviewer (Can conduct interviews)</option>
                     <option value="Admin">Admin (Full access)</option>
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
-                    Admin can edit/delete demands and manage users. HR can only view.
+                    Admin can edit/delete demands and manage users. Recruiter can view and manage candidates. Interviewer can conduct interviews for assigned clients.
                   </p>
                 </div>
+
+                {/* Assigned Client - Only show when role is Interviewer */}
+                {formData.role === "Interviewer" && (
+                  <div className="relative">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Assigned Client <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        value={clientSearchTerm}
+                        onChange={(e) => {
+                          setClientSearchTerm(e.target.value);
+                          setShowClientDropdown(true);
+                          if (e.target.value === "") {
+                            setFormData(prev => ({ ...prev, assignedClient: "" }));
+                          }
+                        }}
+                        onFocus={() => setShowClientDropdown(true)}
+                        placeholder="Search or select client..."
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                    
+                    {/* Client Dropdown */}
+                    {showClientDropdown && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {clientsLoading ? (
+                          <div className="px-4 py-2 text-center text-gray-500">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mx-auto"></div>
+                            Loading clients...
+                          </div>
+                        ) : filteredClients.length > 0 ? (
+                          filteredClients.map((client, index) => (
+                            <div
+                              key={index}
+                              onClick={() => handleClientSelect(client.name)}
+                              className="px-4 py-2 cursor-pointer hover:bg-blue-50 transition-colors"
+                            >
+                              {client.name}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-4 py-2 text-center text-gray-500">
+                            No clients found. Please add clients in Demand section first.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {formData.assignedClient && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Selected client: {formData.assignedClient}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Buttons */}
                 <div className="flex gap-3 pt-4">
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || (formData.role === "Interviewer" && !formData.assignedClient)}
                     className={`flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors ${
-                      loading ? "opacity-50 cursor-not-allowed" : ""
+                      (loading || (formData.role === "Interviewer" && !formData.assignedClient)) ? "opacity-50 cursor-not-allowed" : ""
                     }`}
                   >
                     {loading ? (
@@ -437,6 +591,7 @@ const CreateUser = () => {
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned Client</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
                       <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
@@ -448,13 +603,12 @@ const CreateUser = () => {
                           {user.username}
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            user.role === "Admin" 
-                              ? "bg-purple-100 text-purple-700" 
-                              : "bg-blue-100 text-blue-700"
-                          }`}>
+                          <span className={`px-2 py-1 rounded-full text-xs ${getRoleBadgeClass(user.role)}`}>
                             {user.role}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {user.assignedClient || "-"}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
                           {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "N/A"}
