@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import loginImage from "../assets/Images/login.png";
+import loginImage from "../assets/Images/company.png";
 import logo from "../assets/Images/logo.png";
 import back from "../assets/Images/back.png";
 import { useNavigate } from "react-router-dom";
@@ -9,20 +9,16 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [animateLogo, setAnimateLogo] = useState(false);
   const [errors, setErrors] = useState({ email: "", password: "" });
 
   const navigate = useNavigate();
 
-  useEffect(() => {
-    setAnimateLogo(true);
-  }, []);
-
-  const validate = () => {
+  // Validate both fields
+  const validateForm = () => {
     let valid = true;
     const newErrors = { email: "", password: "" };
 
-    if (!email) {
+    if (!email.trim()) {
       newErrors.email = "Username is required";
       valid = false;
     }
@@ -39,11 +35,27 @@ const Login = () => {
     return valid;
   };
 
+  // Clear error for a specific field when user starts typing
+  const handleEmailChange = (e) => {
+    setEmail(e.target.value);
+    if (errors.email) {
+      setErrors(prev => ({ ...prev, email: "" }));
+    }
+  };
+
+  const handlePasswordChange = (e) => {
+    setPassword(e.target.value);
+    if (errors.password) {
+      setErrors(prev => ({ ...prev, password: "" }));
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
-
-    if (!validate()) return;
-
+    
+    // Validate before submitting
+    if (!validateForm()) return;
+    
     setIsSubmitting(true);
 
     try {
@@ -54,15 +66,12 @@ const Login = () => {
       });
 
       const data = await res.json();
-
+      
       if (res.ok) {
-        // Save user info
         localStorage.setItem("user", JSON.stringify(data.user));
-
         navigate("/dashboard");
-      }
-      else {
-        alert(data.message); // Invalid credentials
+      } else {
+        alert(data.message);
       }
     } catch (err) {
       console.error("Login error:", err);
@@ -73,129 +82,111 @@ const Login = () => {
   };
 
   return (
-          <div
-        className="h-screen overflow-hidden flex items-center justify-center bg-cover bg-center"
-        style={{ backgroundImage: `url(${back})` }}
-      >
-     <div className="relative w-full max-w-6xl">
-        <div className="absolute -inset-0 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 rounded-3xl blur-2xl opacity-15" />
+    <div
+      className="h-screen w-full flex items-center justify-center bg-cover bg-center bg-no-repeat font-sans"
+      style={{ backgroundImage: `url(${back})` }}
+    >
+      {/* Main Container */}
+      <div className="relative w-[95%] max-w-5xl h-[600px] flex shadow-2xl rounded-3xl overflow-hidden bg-white/80 backdrop-blur-md border border-white/20">
+        
+        {/* LEFT SECTION - The Dynamic Professional Image */}
+        <div className="hidden lg:block w-1/2 h-full overflow-hidden border-r border-gray-100">
+          <img
+            src={loginImage}
+            alt="Professional Workspace"
+            className="w-full h-full transition-transform duration-700 hover:scale-105"
+          />
+        </div>
 
-        <div className="relative bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-2 h-[760px]">
+        {/* RIGHT SECTION - The Login Form */}
+        <div className="w-full lg:w-1/2 flex flex-col justify-center p-8 md:p-14 bg-white/40">
+          <div className="w-full max-w-sm mx-auto">
+            
+            {/* Branding Area */}
+            <div className="text-center mb-8">
+              <img src={logo} alt="UAW Logo" className="h-16 mx-auto mb-4 object-contain" />
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
+                UANDWE Knowledge Base
+              </h2>
+              <p className="text-md font-medium mt-1 text-slate-600">Welcome</p>
+            </div>
 
-            {/* LEFT SECTION */}
-            <div className="hidden lg:flex flex-col items-center justify-center bg-gradient-to-br from-blue-500 via-gray-700 to-black-600 p-3">
-              <div
-                className={`flex flex-col items-center gap-6 transition-all duration-1000 ${
-                  animateLogo ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
+            {/* Login Form */}
+            <form onSubmit={handleLogin} className="space-y-5">
+              
+              {/* Username Field */}
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-slate-700 ml-1">Username</label>
+                <input
+                  type="text"
+                  placeholder="Enter your username"
+                  value={email}
+                  onChange={handleEmailChange}
+                  className={`w-full px-4 py-3 bg-white/60 border rounded-xl outline-none transition-all focus:ring-4 ${
+                    errors.email 
+                      ? "border-red-400 focus:ring-red-500/10" 
+                      : "border-slate-200 focus:border-blue-500 focus:ring-blue-500/10"
+                  }`}
+                />
+                {errors.email && (
+                  <p className="text-red-500 text-xs mt-1 ml-1 flex items-center gap-1">
+                    <span className="inline-block w-1 h-1 bg-red-500 rounded-full"></span>
+                    {errors.email}
+                  </p>
+                )}
+              </div>
+
+              {/* Password Field */}
+              <div className="space-y-1">
+                <label className="text-sm font-semibold text-slate-700 ml-1">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={handlePasswordChange}
+                    className={`w-full px-4 py-3 bg-white/60 border rounded-xl outline-none transition-all focus:ring-4 ${
+                      errors.password 
+                        ? "border-red-400 focus:ring-red-500/10" 
+                        : "border-slate-200 focus:border-blue-500 focus:ring-blue-500/10"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors text-lg cursor-pointer"
+                  >
+                    {showPassword ? "👁️" : "👁️‍🗨️"}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-red-500 text-xs mt-1 ml-1 flex items-center gap-1">
+                    <span className="inline-block w-1 h-1 bg-red-500 rounded-full"></span>
+                    {errors.password}
+                  </p>
+                )}
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all duration-300 ${
+                  isSubmitting
+                    ? "bg-slate-400 cursor-not-allowed"
+                    : "bg-gradient-to-br from-blue-500 via-gray-700 to-black hover:brightness-110 hover:shadow-xl hover:scale-[1.02] active:scale-95"
                 }`}
               >
-                <img src={logo} alt="UANDWE Logo" className="h-24 w-24" />
-                <h1 className="text-3xl font-bold text-blue-100">
-                  UAW Technologies
-                </h1>
-              
+                {isSubmitting ? "Signing In..." : "Sign In"}
+              </button>
 
-                <img
-                  src={loginImage}
-                  alt="Login"
-                  className="max-w-[640px] max-h-[350px] mt-6 object-contain"
-                />
+              {/* Footer text */}
+              <div className="pt-6 text-center">
+                <p className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">
+                  © {new Date().getFullYear()} UAW Technologies
+                </p>
               </div>
-            </div>
-
-            {/* RIGHT SECTION */}
-            <div className="p-8 md:p-12 flex flex-col justify-center">
-              <div className="max-w-md mx-auto w-full">
-
-                {/* MOBILE LOGO */}
-                <div className="lg:hidden flex justify-center items-center gap-3 mb-8">
-                  <img src={logo} className="h-12 w-12" alt="Logo"/>
-                  <h1 className="text-xl font-bold"> UAW Technologies</h1>
-                </div>
-
-                {/* HEADER */}
-                <div className="mb-8 text-center">
-                  <h2 className="text-5xl font-bold text-gradient-to-br from-blue-500 via-gray-700 mb-2">
-                  Knowledge Base
-                  </h2>
-                  <h4 className="text-4xl font-medium text-gray-800 mb-2 py-9">
-                    Welcome
-                  </h4>
-                </div>
-
-                {/* FORM */}
-                <form onSubmit={handleLogin} className="space-y-6">
-
-                  {/* EMAIL */}
-                  <div>
-                    <label className="text-lg font-bold text-gray-600 mb-1 block">
-                      Username:
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter the username"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={`w-full px-4 py-3 border-2 rounded-xl focus:ring-4 outline-none ${
-                        errors.email
-                          ? "border-red-500 focus:ring-red-100"
-                          : "border-gray-200 focus:border-blue-500 focus:ring-blue-100"
-                      }`}
-                    />
-                    {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
-                  </div>
-
-                  {/* PASSWORD */}
-                  <div>
-                    <label className="text-lg font-bold text-gray-600 mb-1 block">
-                      Password:
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Enter password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className={`w-full px-4 py-3 pr-12 border-2 rounded-xl focus:ring-4 outline-none ${
-                          errors.password
-                            ? "border-red-500 focus:ring-red-100"
-                            : "border-gray-200 focus:border-blue-500 focus:ring-blue-100"
-                        }`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600"
-                      >
-                        {showPassword ? "👁️" : "👁️‍🗨️"}
-                      </button>
-                    </div>
-                    {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
-                  </div>
-
-                  {/* SUBMIT */}
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`w-full py-3 rounded-xl font-semibold text-white transition-all duration-300 ${
-                      isSubmitting
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-gradient-to-br from-blue-500 via-gray-700 to-black hover:brightness-110 hover:shadow-xl hover:scale-[1.02] active:scale-95"
-                    }`}
-                  >
-                    {isSubmitting ? "Signing In..." : "Sign In"}
-                  </button>
-
-                  {/* FOOTER */}
-                  <p className="text-center text-sm text-gray-500 pt-4">
-                    © {new Date().getFullYear()} UAW Technologies
-                  </p>
-
-                </form>
-              </div>
-            </div>
-
+            </form>
           </div>
         </div>
       </div>
