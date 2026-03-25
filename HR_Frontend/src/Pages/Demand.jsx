@@ -49,6 +49,7 @@ const Demand = () => {
   const [statusChangeDesc, setStatusChangeDesc] = useState("");
   const [showStatusDesc, setShowStatusDesc] = useState(false);
   const [previousStatus, setPreviousStatus] = useState("");
+  const [assignedClient, setAssignedClient] = useState(null);
   // Status Edit Modal States
 const [showStatusEditModal, setShowStatusEditModal] = useState(false);
 const [selectedStatusCandidate, setSelectedStatusCandidate] = useState(null);
@@ -76,13 +77,22 @@ const [selectedHistoryCandidate, setSelectedHistoryCandidate] = useState(null);
 
   const navigate = useNavigate();
 
-  // Get user role from localStorage
-  useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (user) {
-      setUserRole(user.role);
+useEffect(() => {
+  const user = JSON.parse(localStorage.getItem("user"));
+  console.log("🔍 User from localStorage:", user);
+  
+  if (user) {
+    setUserRole(user.role);
+    
+    // If role is Interviewer, use username as assigned client
+    if (user.role === "Interviewer") {
+      // Use username as the assigned client
+      setAssignedClient(user.username);
+      console.log("🔍 Interviewer assigned to client:", user.username);
     }
-  }, []);
+  }
+  fetchDemands();
+}, []);
 
   const fetchDemands = async () => {
     try {
@@ -132,23 +142,36 @@ const [selectedHistoryCandidate, setSelectedHistoryCandidate] = useState(null);
       console.error("❌ Error loading all selected candidates:", err);
     }
   };
-  // Open status edit modal
 const openStatusEditModal = (candidate) => {
   setSelectedStatusCandidate(candidate);
-  setSelectedNewStatus(candidate.status);
+  setSelectedNewStatus(candidate.status);  // ← This sets it to the current status, not what you want
   setStatusReason('');
   setShowStatusEditModal(true);
 };
 
-// View candidate history
+// View candidate history - Modified to include demand details
 const viewCandidateHistory = (candidate) => {
-  setSelectedHistoryCandidate(candidate);
+  // Find the current demand details from selectedDemandDetails
+  // If selectedDemandDetails exists, use its rrNumber, otherwise fallback to ID
+  setSelectedHistoryCandidate({
+    ...candidate,
+    demandRrNumber: selectedDemandDetails?.rrNumber || `RR${String(selectedDemandId).padStart(3, "0")}`
+  });
   setShowHistoryModal(true);
 };
 
-// Handle status update
 const handleStatusUpdate = async () => {
-  if (!selectedNewStatus || !statusReason.trim() || !selectedStatusCandidate) return;
+  // Get the current values directly from state
+  const currentStatus = selectedNewStatus;
+  const currentReason = statusReason;
+  const currentCandidate = selectedStatusCandidate;
+  const currentDemandId = selectedDemandId;
+  
+  console.log("🔍 handleStatusUpdate called");
+  console.log("Current status from state:", currentStatus);
+  console.log("Current candidate:", currentCandidate);
+  
+  if (!currentStatus || !currentReason.trim() || !currentCandidate) return;
   
   try {
     setStatusLoading(true);
@@ -156,37 +179,43 @@ const handleStatusUpdate = async () => {
     const user = JSON.parse(localStorage.getItem("user")) || {};
     const changedBy = user.name || user.username || 'Unknown';
     
-    const response = await axios.put(`https://myuandwe-bg.vercel.app/api/selected-candidates/status`, {
-      candidateId: selectedStatusCandidate.id,
-      demandId: selectedDemandId,
-      status: selectedNewStatus,
-      reason: statusReason,
+    const requestBody = {
+      candidateId: currentCandidate.id,
+      demandId: currentDemandId,
+      status: currentStatus,
+      reason: currentReason,
       changedBy: changedBy
-    });
+    };
+    
+    console.log("Sending PUT request with body:", requestBody);
+    
+    const response = await axios.put(`https://myuandwe-bg.vercel.app/api/selected-candidates/status`, requestBody);
+
+    console.log("Response from server:", response.data);
 
     if (response.data.success) {
-      // Refresh the selected candidates list
-      const updatedCandidates = await fetchSelectedCandidates(selectedDemandId);
-      setCurrentSelectedCandidates(updatedCandidates);
+      console.log("✅ Status update successful, refreshing candidates...");
       
-      // Update main state
+      const updatedCandidates = await fetchSelectedCandidates(currentDemandId);
+      setCurrentSelectedCandidates(updatedCandidates);
       setSelectedCandidates(prev => ({
         ...prev,
-        [selectedDemandId]: updatedCandidates
+        [currentDemandId]: updatedCandidates
       }));
       
-      // Close modal
       setShowStatusEditModal(false);
       setSelectedStatusCandidate(null);
       setSelectedNewStatus('');
       setStatusReason('');
       
-      // Show success message
-      alert('Status updated successfully!');
+      alert(`Status updated to ${currentStatus}!`);
+    } else {
+      console.error("❌ Update failed - response success false");
+      alert('Failed to update status');
     }
   } catch (err) {
-    console.error('Error updating status:', err);
-    alert('Failed to update status');
+    console.error('❌ Error updating status:', err);
+    alert('Failed to update status: ' + (err.response?.data?.message || err.message));
   } finally {
     setStatusLoading(false);
   }
@@ -411,6 +440,8 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
     }
   };
 
+  
+
   useEffect(() => {
     fetchDemands();
   }, []);
@@ -449,14 +480,19 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
     return true; // For priority/date sort, show all
   });
 
-  // Then apply search filter
-  const filteredDemands = statusFilteredDemands.filter((d) =>
-    `${d.clientName || ""} ${d.location || ""} ${(d.primarySkill || []).join(
-      " "
-    )} ${(d.secondarySkill || []).join(" ")}`
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase())
-  );
+const filteredDemands = statusFilteredDemands.filter((d) => {
+  // If user is Interviewer, filter by assigned client
+  if (userRole === "Interviewer" && assignedClient) {
+    if (d.clientName !== assignedClient) {
+      return false;
+    }
+  }
+  
+  // Apply search filter
+  return `${d.clientName || ""} ${d.location || ""} ${(d.primarySkill || []).join(" ")} ${(d.secondarySkill || []).join(" ")}`
+    .toLowerCase()
+    .includes(searchTerm.toLowerCase());
+});
 
   const sortedDemands = [...filteredDemands].sort((a, b) => {
     if (sortBy === "priority") {
@@ -816,6 +852,60 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
     });
   };
 
+  // New function to update candidate status
+const updateCandidateStatus = async (newStatus) => {
+  if (!newStatus || !statusReason.trim() || !selectedStatusCandidate) return;
+  
+  console.log("🔍 updateCandidateStatus called with status:", newStatus);
+  
+  try {
+    setStatusLoading(true);
+    
+    const user = JSON.parse(localStorage.getItem("user")) || {};
+    const changedBy = user.name || user.username || 'Unknown';
+    
+    const requestBody = {
+      candidateId: selectedStatusCandidate.id,
+      demandId: selectedDemandId,
+      status: newStatus,
+      reason: statusReason,
+      changedBy: changedBy
+    };
+    
+    console.log("Sending PUT request with body:", requestBody);
+    
+    const response = await axios.put(`https://myuandwe-bg.vercel.app/api/selected-candidates/status`, requestBody);
+
+    console.log("Response from server:", response.data);
+
+    if (response.data.success) {
+      console.log("✅ Status update successful, refreshing candidates...");
+      
+      const updatedCandidates = await fetchSelectedCandidates(selectedDemandId);
+      setCurrentSelectedCandidates(updatedCandidates);
+      setSelectedCandidates(prev => ({
+        ...prev,
+        [selectedDemandId]: updatedCandidates
+      }));
+      
+      setShowStatusEditModal(false);
+      setSelectedStatusCandidate(null);
+      setStatusReason('');
+      setSelectedNewStatus('');
+      
+      alert(`Status updated to ${newStatus}!`);
+    } else {
+      console.error("❌ Update failed - response success false");
+      alert('Failed to update status');
+    }
+  } catch (err) {
+    console.error('❌ Error updating status:', err);
+    alert('Failed to update status: ' + (err.response?.data?.message || err.message));
+  } finally {
+    setStatusLoading(false);
+  }
+};
+
   return (
     <div
       className="min-h-screen bg-cover bg-center bg-no-repeat"
@@ -886,63 +976,45 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
           <div className="bg-white rounded-2xl shadow-xl p-4 overflow-x-auto">
             <table className="min-w-full text-sm text-left">
               <thead>
-                <tr className="bg-gray-100 uppercase text-xs">
-                  <th className="px-4 py-3">S/N</th>
-                  <th className="px-4 py-3">RR No</th>
-                  <th className="px-4 py-3">Client</th>
-                  <th className="px-4 py-3">Location</th>
-                  <th className="px-4 py-3">Skills</th>
-                  <th className="px-4 py-3">Ageing</th>
-                  <th className="px-4 py-3">Experience</th>
-                  <th className="px-4 py-3">Priority</th>
-                  <th className="px-4 py-3">Recruiter</th>
-                 
-                </tr>
-              </thead>
+  <tr className="bg-gray-100 uppercase text-xs">
+    <th className="px-4 py-3">S/N</th>
+    <th className="px-4 py-3">RR No</th>
+    <th className="px-4 py-3">Client</th>
+    <th className="px-4 py-3">Location</th>
+    <th className="px-4 py-3">Skills</th>
+    <th className="px-4 py-3">Ageing</th>
+    <th className="px-4 py-3">Experience</th>
+    <th className="px-4 py-3">Priority</th>
+    <th className="px-4 py-3">Recruiter</th>
+  </tr>
+</thead>
 
               <tbody>
                 {currentItems.map((d, index) => (
                   <tr key={d.id} className="border-b hover:bg-gray-50">
-                    <td className="px-4 py-3">{indexOfFirstItem + index + 1}</td>
-
-                    <td
-                      className="px-4 py-3 font-semibold text-blue-600 cursor-pointer hover:underline"
-                      onClick={() => setSelectedDemand(d)}
-                    >
-                      {d.rrNumber || `RR${String(d.id).padStart(3, "0")}`}
-                    </td>
-
-                    <td className="px-4 py-3">{d.clientName}</td>
-                    <td className="px-4 py-3">
-                      {d.location}, {d.country}
-                    </td>
-                    <td className="px-4 py-3">
-                      {(d.primarySkill || []).join(", ")} / {(d.secondarySkill || []).join(", ")}
-                    </td>
-                    <td className="px-4 py-3">
-                      {d.ageingWeeks ?? calculateAgeing(d.createdDate)} weeks
-                    </td>
-                    <td className="px-4 py-3">
-                      {d.expFrom}-{d.expTo} yrs
-                    </td>
-                    <td className="px-4 py-3">{d.jobPriority}</td>
-                    <td className="px-4 py-3">{d.recruiterPOC}</td>
-                    {/* <td className="px-4 py-3">
-                      <button
-                        onClick={() => handleViewSelectedCandidates(d)}
-                        className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
-                        title="View Selected Candidates"
-                      >
-                        <Users size={14} />
-                        <span className="text-xs">View</span>
-                        {selectedCandidates[d.id]?.length > 0 && (
-                          <span className="ml-1 bg-green-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                            {selectedCandidates[d.id].length}
-                          </span>
-                        )}
-                      </button>
-                    </td> */}
-                  </tr>
+  <td className="px-4 py-3">{indexOfFirstItem + index + 1}</td>
+  <td
+    className="px-4 py-3 font-semibold text-blue-600 cursor-pointer hover:underline"
+    onClick={() => setSelectedDemand(d)}
+  >
+    {d.rrNumber || `RR${String(d.id).padStart(3, "0")}`}
+  </td>
+  <td className="px-4 py-3">{d.clientName}</td>
+  <td className="px-4 py-3">
+    {d.location}, {d.country}
+  </td>
+  <td className="px-4 py-3">
+    {(d.primarySkill || []).join(", ")} / {(d.secondarySkill || []).join(", ")}
+  </td>
+  <td className="px-4 py-3">
+    {d.ageingWeeks ?? calculateAgeing(d.createdDate)} weeks
+  </td>
+  <td className="px-4 py-3">
+    {d.expFrom}-{d.expTo} yrs
+  </td>
+  <td className="px-4 py-3">{d.jobPriority}</td>
+  <td className="px-4 py-3">{d.recruiterPOC}</td>
+</tr>
                 ))}
               </tbody>
             </table>
@@ -1458,35 +1530,30 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
                   </div>
                 </div>
 
-                {/* ACTION BUTTONS */}
-                <div className="mt-6 flex justify-center gap-4 pb-2">
-                  {!isAdding && formDemand?.id && (
-                    <>
-                      <button
-                        onClick={() => handleViewCandidates(formDemand)}
-                        className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-lg"
-                      >
-                        <Search size={18} /> View Candidates
-                      </button>
-                      
-                      <button
-                        onClick={() => handleViewSelectedCandidates(formDemand)}
-                        className="flex items-center gap-2 px-8 py-3 bg-green-600 text-white rounded-full hover:bg-green-700 shadow-lg"
-                      >
-                        <Users size={18} /> View Selected ({selectedCandidates[formDemand.id]?.length || 0})
-                      </button>
-                    </>
-                  )}
-
-                  {(isEditing || isAdding) && (
-                    <button
-                      onClick={handleCancelEdit}
-                      className="flex items-center gap-2 px-8 py-3 bg-gray-600 text-white rounded-full hover:bg-gray-700 shadow-lg"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
+              {/* ACTION BUTTONS */}
+<div className="mt-6 flex justify-center gap-4 pb-2">
+  {!isAdding && formDemand?.id && (
+    <>
+      {/* Show View Candidates button only for Admin and Recruiter (not for Interviewer) */}
+      {userRole !== "Interviewer" && (
+        <button
+          onClick={() => handleViewCandidates(formDemand)}
+          className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-lg"
+        >
+          <Search size={18} /> View Candidates
+        </button>
+      )}
+      
+      {/* View Selected button - Show for all roles */}
+      <button
+        onClick={() => handleViewSelectedCandidates(formDemand)}
+        className="flex items-center gap-2 px-8 py-3 bg-green-600 text-white rounded-full hover:bg-green-700 shadow-lg"
+      >
+        <Users size={18} /> View Selected ({selectedCandidates[formDemand.id]?.length || 0})
+      </button>
+    </>
+  )}
+</div>
               </div> {/* Closes Scrollable Content Area */}
             </div> {/* Closes Main popup container */}
           </div> /* Closes POPUP wrapper div */
@@ -1645,14 +1712,23 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
         <p className="text-gray-600 mb-4">
           Updating status for <span className="font-semibold">{selectedStatusCandidate.name}</span>
         </p>
+        <p className="text-gray-500 text-sm mb-4">
+          Current Status: <span className="font-medium">{selectedStatusCandidate.status}</span>
+        </p>
         
         <div className="space-y-4">
-          {/* Status Selection */}
+          {/* Status Selection - Using local state with useState inside modal */}
           <div>
-            <label className="block text-sm font-medium mb-2">Select Status</label>
-            <select
-              value={selectedNewStatus}
-              onChange={(e) => setSelectedNewStatus(e.target.value)}
+            <label className="block text-sm font-medium mb-2">Select New Status</label>
+           <select
+  value={selectedNewStatus}
+  onChange={(e) => {
+    const newValue = e.target.value;
+    console.log("📝 Dropdown changed to:", newValue);
+    setSelectedNewStatus(newValue);
+                // Also store in localStorage for debugging
+                localStorage.setItem('temp_selected_status', newValue);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="Pending Screening">Pending Screening</option>
@@ -1660,13 +1736,12 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
               <option value="Pending Client Screening">Pending Client Screening</option>
               <option value="Pending Client Interview">Pending Client Interview</option>
               <option value="Pending Offer">Pending Offer</option>
-              <option value="Offer Decline">Offer Decline</option>
               <option value="Pending Joinee">Pending Joinee</option>
+              <option value="Offer Decline">Offer Decline</option>
               <option value="Interview Reject">Interview Reject</option>
               <option value="Client Interview Reject">Client Interview Reject</option>
               <option value="Screening Reject">Screening Reject</option>
               <option value="Client Screening Reject">Client Screening Reject</option>
-
             </select>
           </div>
           
@@ -1698,26 +1773,32 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
             Cancel
           </button>
           <button
-            onClick={handleStatusUpdate}
-            disabled={!selectedNewStatus || !statusReason.trim()}
-            className={`px-6 py-2 rounded-lg transition flex items-center gap-2 ${
-              !selectedNewStatus || !statusReason.trim()
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-          >
-            {statusLoading ? (
-              <>
-                <Loader size={16} className="animate-spin" />
-                Updating...
-              </>
-            ) : (
-              <>
-                <CheckCircle size={16} />
-                Update Status
-              </>
-            )}
-          </button>
+  onClick={() => {
+    if (selectedNewStatus && statusReason.trim()) {
+      updateCandidateStatus(selectedNewStatus);
+    } else {
+      alert('Please select a status and provide a reason');
+    }
+  }}
+  disabled={!statusReason.trim()}
+  className={`px-6 py-2 rounded-lg transition flex items-center gap-2 ${
+    !statusReason.trim()
+      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+      : 'bg-blue-600 text-white hover:bg-blue-700'
+  }`}
+>
+  {statusLoading ? (
+    <>
+      <Loader size={16} className="animate-spin" />
+      Updating...
+    </>
+  ) : (
+    <>
+      <CheckCircle size={16} />
+      Update Status
+    </>
+  )}
+</button>
         </div>
       </div>
     </div>
@@ -1768,8 +1849,9 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
                 </span>
               </div>
               <p className="text-sm text-gray-600">
-                Added to demand by <span className="font-medium">{selectedHistoryCandidate.selectedBy}</span>
-              </p>
+  Added to <span className="font-medium text-blue-600">{selectedHistoryCandidate.demandRrNumber}</span> by{' '}
+  <span className="font-medium">{selectedHistoryCandidate.selectedBy}</span>
+</p>
               <p className="text-xs text-gray-400 mt-1">Initial status: In Progress</p>
             </div>
           </div>
@@ -1778,7 +1860,9 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
         {/* Status Change History */}
         {selectedHistoryCandidate.history && selectedHistoryCandidate.history.length > 0 ? (
           <div className="space-y-4">
-            {selectedHistoryCandidate.history.map((entry, index) => (
+           {selectedHistoryCandidate.history
+  .filter(entry => entry.fromStatus && entry.toStatus)
+  .map((entry, index) => (
               <div key={index} className="flex items-start gap-3">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
                   entry.toStatus === 'Selected' ? 'bg-green-100' :
@@ -1793,21 +1877,31 @@ const handleCandidateAction = async (candidateId, newStatus, reason) => {
                   )}
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold">
-                      {entry.fromStatus} → {entry.toStatus}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {new Date(entry.changedAt).toLocaleString()}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-700 mt-1 bg-gray-50 p-2 rounded">
-                    {entry.reason}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Updated by: <span className="font-medium">{entry.changedBy}</span>
-                  </p>
-                </div>
+{entry.fromStatus && entry.toStatus && (
+  <>
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="font-semibold">
+        {entry.fromStatus} → {entry.toStatus}
+      </span>
+
+      <span className="text-xs text-gray-400">
+        {new Date(entry.changedAt).toLocaleString()}
+      </span>
+    </div>
+
+    <p className="text-xs text-gray-500 mt-1">
+      Updated by: <span className="font-medium">{entry.changedBy}</span>
+    </p>
+
+    {/* ✅ ADD THIS PART */}
+    {entry.reason && (
+      <p className="text-sm text-gray-700 mt-2 bg-gray-50 p-2 rounded">
+        {entry.reason}
+      </p>
+    )}
+  </>
+)}
+</div>
               </div>
             ))}
           </div>
