@@ -1,13 +1,12 @@
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
 
 const app = express();
 
 /* ================================
-   CORS CONFIG (FIXED FOR VERCEL)
+   CORS CONFIG (VERCEL SAFE)
 ================================ */
 
 const allowedOrigins = [
@@ -15,34 +14,19 @@ const allowedOrigins = [
   "https://myuandwe.vercel.app"
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin (like Postman)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true
-}));
-
-// ✅ Handle preflight requests
-app.options("*", cors());
-
-/* ================================
-   EXTRA HEADERS (VERY IMPORTANT)
-================================ */
-
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://myuandwe.vercel.app");
-  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
+    return res.status(200).end();
   }
 
   next();
@@ -83,7 +67,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: "https://myuandwe-bg.vercel.app" // ✅ FIXED
+        url: "https://myuandwe-bg.vercel.app"
       }
     ]
   },
@@ -97,7 +81,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
    TEST ROUTE
 ================================ */
 
-app.get("/test", (req, res) => {
+app.get("/api/test", (req, res) => {
   res.json({
     success: true,
     message: "Server is running",
