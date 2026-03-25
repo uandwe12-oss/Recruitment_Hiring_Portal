@@ -35,7 +35,11 @@ const Home = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showDevelopmentMessage, setShowDevelopmentMessage] = useState(false);
   const [developmentMessage, setDevelopmentMessage] = useState("");
-
+const [locations, setLocations] = useState([
+  { name: "India", code: "IN", active: true },
+  { name: "US", code: "US", active: false },
+  { name: "China", code: "CN", active: false }
+]);
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user"));
     if (storedUser) {
@@ -68,13 +72,15 @@ const Home = () => {
     day: 'numeric' 
   });
 
+const handleLocationClick = (clickedIndex) => {
+  const updated = locations.map((loc, index) => ({
+    ...loc,
+    active: index === clickedIndex
+  }));
+  setLocations(updated);
+};
 
 
-const locations = [
-  { name: "India", code: "IN", active: true },
-  { name: "US", code: "US", active: false },
-  { name: "China", code: "CN", active: false }
-];
 
   const allCards = [
     { icon: <User />, title: "My Personal Details" },
@@ -100,19 +106,28 @@ const locations = [
     card.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCardClick = (title) => {
-    if (title === "Recruitment") {
-      // Navigate to recruitment page
-      navigate("/recruitment");
+ const handleCardClick = (title) => {
+  if (title === "Recruitment") {
+    // Get user from localStorage
+    const user = JSON.parse(localStorage.getItem("user"));
+    const userRole = user?.role;
+    
+    // If user is Interviewer, navigate to Demand page
+    if (userRole === "Interviewer") {
+      navigate("/demand");
     } else {
-      // Show development message for other cards
-      setDevelopmentMessage(`UANDWE Knowledge Base: "${title}" is under development`);
-      setShowDevelopmentMessage(true);
-      setTimeout(() => {
-        setShowDevelopmentMessage(false);
-      }, 3000);
+      // For Admin and Recruiter, navigate to Recruitment page
+      navigate("/recruitment");
     }
-  };
+  } else {
+    // Show development message for other cards
+    setDevelopmentMessage(`UANDWE Knowledge Base: "${title}" is under development`);
+    setShowDevelopmentMessage(true);
+    setTimeout(() => {
+      setShowDevelopmentMessage(false);
+    }, 3000);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -259,8 +274,9 @@ const locations = [
         <div className="mb-8">
           <div className="flex items-center gap-2 bg-white rounded-lg p-1 border border-gray-200 inline-flex">
             {locations.map((location, index) => (
-  <button
-    key={index}
+<button
+  key={index}
+  onClick={() => handleLocationClick(index)}
     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border
       ${
         location.active
