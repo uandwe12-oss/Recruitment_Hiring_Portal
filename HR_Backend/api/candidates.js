@@ -918,15 +918,27 @@ router.post("/", upload.single('resume'), async (req, res) => {
       });
     }
 
-    // FIXED: Use the correct property name 'Can_ID'
-    const idResult = await session.run(
-      "MATCH (c:Candidate_Profile) RETURN max(c.Can_ID) as maxCanId"
+    // ✅ FIXED: Get all existing IDs and find next available
+    const existingIdsResult = await session.run(
+      "MATCH (c:Candidate_Profile) RETURN c.Can_ID as canId ORDER BY c.Can_ID"
     );
     
-    const maxCanId = toNumber(idResult.records[0].get('maxCanId')) || 0;
-    const nextCanId = maxCanId + 1;
+    const existingIds = existingIdsResult.records
+      .map(record => toNumber(record.get('canId')))
+      .filter(id => id !== null && id !== undefined)
+      .sort((a, b) => a - b);
     
-    console.log("📊 Current max Can_ID in database:", maxCanId);
+    console.log("📊 Existing Can_IDs in database:", existingIds);
+    
+    let nextCanId = 1;
+    for (let i = 0; i < existingIds.length; i++) {
+      if (existingIds[i] === nextCanId) {
+        nextCanId++;
+      } else if (existingIds[i] > nextCanId) {
+        break;
+      }
+    }
+    
     console.log("🔢 Generated new Can_ID:", nextCanId);
 
     // Initialize storage variables
@@ -964,27 +976,23 @@ router.post("/", upload.single('resume'), async (req, res) => {
     // Parse Key Skills
     let keySkills = req.body.keySkills;
     if (typeof keySkills === 'string') {
-      // Handle comma-separated string like "React,Node.js,JavaScript"
       if (keySkills.includes(',')) {
         keySkills = keySkills.split(',').map(s => s.trim()).filter(s => s);
       } else {
-        // Try to parse as JSON array
         try {
           const parsed = JSON.parse(keySkills);
           keySkills = Array.isArray(parsed) ? parsed : [parsed];
         } catch {
-          // If not JSON and no commas, treat as single skill
           keySkills = [keySkills];
         }
       }
     }
 
-    // Ensure keySkills is an array
     if (!Array.isArray(keySkills)) {
       keySkills = keySkills ? [keySkills] : [];
     }
 
-    // FIXED: Use the correct property names that match your database
+    // Prepare profile data
     const profileData = {
       "Candidate Name": req.body.name,
       "Email": req.body.email,
@@ -998,7 +1006,7 @@ router.post("/", upload.single('resume'), async (req, res) => {
       "Client Name": req.body.clientName || "",
       "Profile submission date": req.body.profileSubmissionDate || "",
       "Key Skills": keySkills,
-      "Can_ID": nextCanId,  // This is the correct property name
+      "Can_ID": nextCanId,
       "Visa type": req.body.visaType || "NA",
       "resumePath": resumePath,
       "googleDriveFileId": googleDriveFileId,
@@ -1006,37 +1014,22 @@ router.post("/", upload.single('resume'), async (req, res) => {
       "googleDriveDownloadLink": googleDriveDownloadLink,
       "createdAt": new Date().toISOString(),
       "updatedAt": new Date().toISOString(),
-      "id": nextCanId // Also set id field for compatibility
+      "id": nextCanId
     };
 
     console.log("Saving candidate profile with Can_ID:", nextCanId);
     console.log("Skills:", keySkills);
 
-    // Use a transaction to ensure atomicity
-    const result = await session.executeWrite(async (tx) => {
-      // Double-check the max ID within the transaction
-      const checkResult = await tx.run(
-        "MATCH (c:Candidate_Profile) WHERE c.Can_ID = $id RETURN c",
-        { id: nextCanId }
-      );
-      
-      if (checkResult.records.length > 0) {
-        throw new Error(`Can_ID ${nextCanId} already exists`);
-      }
-      
-      // Create the new candidate
-      const createResult = await tx.run(
-        "CREATE (c:Candidate_Profile) SET c = $data RETURN c",
-        { data: profileData }
-      );
-      
-      return createResult.records[0].get("c").properties;
-    });
+    // Create the candidate
+    const result = await session.run(
+      "CREATE (c:Candidate_Profile) SET c = $data RETURN c",
+      { data: profileData }
+    );
 
-    const formatted = formatProfileForResponse(result);
+    const created = result.records[0].get("c").properties;
+    const formatted = formatProfileForResponse(created);
 
     console.log("✅ Candidate profile created successfully with Can_ID:", nextCanId);
-    console.log(`📊 Total profiles now: ${nextCanId}`);
 
     res.status(201).json({
       success: true,
@@ -1047,16 +1040,8 @@ router.post("/", upload.single('resume'), async (req, res) => {
   } catch (err) {
     console.error("❌ Error creating candidate profile:", err);
     
-    // Check for specific Neo4j constraint errors
-    if (err.message && err.message.includes("already exists with label")) {
-      return res.status(400).json({
-        success: false,
-        message: "A candidate with this ID already exists. Please try again.",
-        error: err.message
-      });
-    }
-    
-    if (err.message && err.message.includes("Can_ID")) {
+    // Check for duplicate email/mobile errors
+    if (err.message && (err.message.includes("Email") || err.message.includes("Mobile"))) {
       return res.status(400).json({
         success: false,
         message: err.message,
@@ -1408,5 +1393,68 @@ router.get("/resume/:filename", (req, res) => {
     });
   }
 });
-
+// Add to candidates.js
+/**
+ * GET /api/candidates/check-zone/:candidateId/:clientName
+ * Check if candidate is in zone for a specific client
+ */
+router.get("/check-zone/:candidateId/:clientName", async (req, res) => {
+  const { candidateId, clientName } = req.params;
+  
+  console.log(`\n📡 GET /api/candidates/check-zone/${candidateId}/${clientName}`);
+  
+  const driver = getDriver();
+  const session = driver.session();
+  
+  try {
+    const result = await session.run(`
+      MATCH (z:Zone {candidateId: $candidateId, clientName: $clientName})
+      WHERE z.expiryDate > datetime()
+      RETURN z
+    `, {
+      candidateId: parseInt(candidateId),
+      clientName: clientName
+    });
+    
+    if (result.records.length === 0) {
+      return res.json({
+        success: true,
+        inZone: false,
+        eligible: true,
+        message: "Candidate is eligible for this client"
+      });
+    }
+    
+    const zoneEntry = result.records[0].get('z').properties;
+    const expiryDate = new Date(zoneEntry.expiryDate);
+    const now = new Date();
+    const daysRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+    
+    res.json({
+      success: true,
+      inZone: true,
+      eligible: false,
+      data: {
+        candidateId: toNumber(zoneEntry.candidateId),
+        clientName: zoneEntry.clientName,
+        rejectedStatus: zoneEntry.rejectedStatus,
+        reason: zoneEntry.reason,
+        rejectedAt: zoneEntry.rejectedAt,
+        expiryDate: zoneEntry.expiryDate,
+        daysRemaining: daysRemaining
+      },
+      message: `Candidate cannot be selected for ${clientName}. In zone for ${daysRemaining} more days.`
+    });
+    
+  } catch (err) {
+    console.error("❌ Error checking zone:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to check zone status",
+      error: err.message
+    });
+  } finally {
+    await session.close();
+  }
+});
 module.exports = router;
