@@ -531,83 +531,98 @@ useEffect(() => {
     }
   };
   useEffect(() => {
-    const autoFilterFromDemand = async () => {
-      // Check if we should auto-apply filters
-      if (searchParams.get('autoFilter') === 'true') {
-        const primarySkills = searchParams.get('primarySkills')?.split(',').filter(s => s) || [];
-        const secondarySkills = searchParams.get('secondarySkills')?.split(',').filter(s => s) || [];
-        const minExperience = searchParams.get('minExperience');
-        const maxExperience = searchParams.get('maxExperience');
-        const demandId = searchParams.get('demandId');
+const autoFilterFromDemand = async () => {
+  // Check if we should auto-apply filters
+  if (searchParams.get('autoFilter') === 'true') {
+    const primarySkills = searchParams.get('primarySkills')?.split(',').filter(s => s) || [];
+    const secondarySkills = searchParams.get('secondarySkills')?.split(',').filter(s => s) || [];
+    const minExperience = searchParams.get('minExperience');
+    const maxExperience = searchParams.get('maxExperience');
+    const demandId = searchParams.get('demandId');
+    const clientName = searchParams.get('clientName'); // ← ADD THIS LINE
+    
+    console.log(`🔍 Auto-filtering for demand ID: ${demandId}`);
+    console.log('Client name for Zone filtering:', clientName); // ← ADD THIS LOG
+    console.log('Primary skills:', primarySkills);
+    console.log('Secondary skills:', secondarySkills);
+    console.log('Experience range:', minExperience, '-', maxExperience);
+    
+    // Set the search filters state
+    setSearchFilters({
+      primarySkills: primarySkills,
+      secondarySkills: secondarySkills,
+      experienceMin: minExperience || "",
+      experienceMax: maxExperience || "",
+      location: ""
+    });
+    
+    // Set the input fields for display
+    setPrimarySkillInput(primarySkills.join(', '));
+    setSecondarySkillInput(secondarySkills.join(', '));
+    
+    // Apply the filters
+    try {
+      setFilterLoading(true);
+      
+      // Build the API request
+      const params = new URLSearchParams();
+      
+      if (primarySkills.length > 0) {
+        params.append('primarySkills', primarySkills.join(','));
+      }
+      
+      if (secondarySkills.length > 0) {
+        params.append('secondarySkills', secondarySkills.join(','));
+      }
+      
+      if (minExperience) {
+        params.append('minExperience', minExperience);
+      }
+      
+      if (maxExperience) {
+        params.append('maxExperience', maxExperience);
+      }
+      
+      // ✅ ADD THIS - Pass clientName for Zone filtering
+      if (clientName) {
+        params.append('clientName', clientName);
+        console.log(`🚫 Filtering out candidates in Zone for client: ${clientName}`);
+      }
+      
+      console.log("Calling filter API with:", params.toString());
+      
+      const response = await axios.get(`https://myuandwe-bg.vercel.app/api/shortcandidates/filter?${params.toString()}`);
+      
+      if (response.data.success) {
+        console.log(`✅ API response: Excluded ${response.data.excludedZoneCount || 0} candidates from Zone`);
         
-        console.log(`🔍 Auto-filtering for demand ID: ${demandId}`);
-        console.log('Primary skills:', primarySkills);
-        console.log('Secondary skills:', secondarySkills);
-        console.log('Experience range:', minExperience, '-', maxExperience);
+        const processedCandidates = response.data.data
+          .map(processCandidate)
+          .filter(c => c !== null);
         
-        // Set the search filters state
-        setSearchFilters({
-          primarySkills: primarySkills,
-          secondarySkills: secondarySkills,
-          experienceMin: minExperience || "",
-          experienceMax: maxExperience || "",
-          location: ""
-        });
+        console.log(`✅ Found ${processedCandidates.length} candidates matching demand requirements`);
+        setDisplayedCandidates(processedCandidates);
+        setCurrentPage(1);
+        setSelectedSkill("All");
+        setSearchTerm("");
         
-        // Set the input fields for display
-        setPrimarySkillInput(primarySkills.join(', '));
-        setSecondarySkillInput(secondarySkills.join(', '));
-        
-        // Apply the filters
-        try {
-          setFilterLoading(true);
-          
-          // Build the API request
-          const params = new URLSearchParams();
-          
-          if (primarySkills.length > 0) {
-            params.append('primarySkills', primarySkills.join(','));
-          }
-          
-          if (secondarySkills.length > 0) {
-            params.append('secondarySkills', secondarySkills.join(','));
-          }
-          
-          if (minExperience) {
-            params.append('minExperience', minExperience);
-          }
-          
-          if (maxExperience) {
-            params.append('maxExperience', maxExperience);
-          }
-          
-          console.log("Calling filter API with:", params.toString());
-          
-          const response = await axios.get(`https://myuandwe-bg.vercel.app/api/shortcandidates/filter?${params.toString()}`);
-          
-          if (response.data.success) {
-            const processedCandidates = response.data.data
-              .map(processCandidate)
-              .filter(c => c !== null);
-            
-            console.log(`✅ Found ${processedCandidates.length} candidates matching demand requirements`);
-            setDisplayedCandidates(processedCandidates);
-            setCurrentPage(1);
-            setSelectedSkill("All");
-            setSearchTerm("");
-            
-            // Show success message
-            setSuccessMessage(`Found ${processedCandidates.length} candidates matching this demand`);
-            setTimeout(() => setSuccessMessage(""), 3000);
-          }
-        } catch (err) {
-          console.error('❌ Error auto-applying filters:', err);
-          setError("Failed to filter candidates for this demand");
-        } finally {
-          setFilterLoading(false);
+        // Show success message with excluded count
+        if (response.data.excludedZoneCount > 0) {
+          setSuccessMessage(`Found ${processedCandidates.length} candidates (${response.data.excludedZoneCount} excluded from Zone)`);
+          setTimeout(() => setSuccessMessage(""), 3000);
+        } else {
+          setSuccessMessage(`Found ${processedCandidates.length} candidates matching this demand`);
+          setTimeout(() => setSuccessMessage(""), 3000);
         }
       }
-    };
+    } catch (err) {
+      console.error('❌ Error auto-applying filters:', err);
+      setError("Failed to filter candidates for this demand");
+    } finally {
+      setFilterLoading(false);
+    }
+  }
+};
     
     // Only run if candidates are loaded
     if (candidates.length > 0) {
@@ -1192,7 +1207,6 @@ const handleSelectCandidate = async (candidate, e) => {
   const demandId = searchParams.get('demandId');
   
   if (demandId) {
-    // Existing logic for when already in demand context
     const isAlreadySelected = selectedCandidates.some(c => c.id === candidate.id);
     
     if (!isAlreadySelected) {
@@ -1205,6 +1219,7 @@ const handleSelectCandidate = async (candidate, e) => {
           status: 'Pending Screening'
         };
         
+        // Add to local state immediately
         setSelectedCandidates(prev => [...prev, {
           ...candidate,
           status: 'Pending Screening'
@@ -1233,14 +1248,10 @@ const handleSelectCandidate = async (candidate, e) => {
   } else {
     // Navigate to demand page with candidate data
     console.log("Navigating to demand page");
-    
-    // Store the selected candidate in sessionStorage (clears when tab closes, but persists across navigation)
     sessionStorage.setItem('selectedCandidate', JSON.stringify({
       ...candidate,
       selectedAt: new Date().toISOString()
     }));
-    
-    // Navigate to demand page
     navigate('/demand');
   }
 };
@@ -1282,11 +1293,17 @@ const handleRemoveCandidate = async (candidateId, e) => {
 
 
   // Handle sending email
-  const handleSendEmail = (email, e) => {
-    e.stopPropagation();
-    if (!email) return;
-    window.open(`mailto:${email}?subject=Job Opportunity`, '_blank');
-  };
+const handleSendEmail = (email, e) => {
+  e.stopPropagation();
+  if (!email) return;
+  
+  // Direct Outlook Web compose URL - this will open the compose window
+  // If the user is already logged in to Outlook Web, it will work directly
+  const outlookComposeUrl = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(email)}`;
+  
+  // Open in new tab
+  window.open(outlookComposeUrl, '_blank');
+};
 
   // Handle sending WhatsApp
   const handleSendWhatsApp = (mobile, e) => {
@@ -2060,7 +2077,7 @@ useEffect(() => {
   }
 }, []);
 
-  // Add this useEffect to fetch existing selected candidates when component mounts
+// Add this useEffect to fetch existing selected candidates when component mounts
 useEffect(() => {
   const fetchExistingSelections = async () => {
     const demandId = searchParams.get('demandId');
@@ -2068,19 +2085,20 @@ useEffect(() => {
       try {
         const response = await axios.get(`https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`);
         if (response.data.success) {
-          // Merge status from the selected data and filter out inactive statuses
+          // ⭐ REMOVE THE isActiveStatus FILTER - keep ALL candidates
           const existingCandidates = response.data.data
             .map(selected => {
               const matchingCandidate = candidates.find(c => c.id === selected.id);
               return {
                 ...matchingCandidate,
-                status: selected.status, // Get the actual status from database
+                status: selected.status,
                 history: selected.history
               };
             })
-            .filter(c => c !== undefined && isActiveStatus(c.status)); // ← FILTER OUT INACTIVE STATUSES
+            .filter(c => c !== undefined); // Only remove if candidate doesn't exist
           
           setSelectedCandidates(existingCandidates);
+          console.log("Loaded selected candidates with statuses:", existingCandidates.map(c => ({ name: c.name, status: c.status })));
         }
       } catch (err) {
         console.error('Error fetching existing selections:', err);
@@ -2730,13 +2748,14 @@ useEffect(() => {
     'Pending Joinee'
   ];
   
-  // Define final statuses that should NOT show anything
+  // Define final/rejected statuses where we show NOTHING
   const finalStatuses = [
     'Offer Decline', 
     'Interview Reject', 
     'Client Interview Reject', 
     'Screening Reject', 
-    'Client Screening Reject'
+    'Client Screening Reject',
+    'Selected' // If Selected is also a final status
   ];
   
   if (selectedInfo) {
@@ -2752,23 +2771,11 @@ useEffect(() => {
         </span>
       );
     } else if (isFinal) {
-      // For final statuses, don't show anything - treat as not selected
-      return (
-        <button
-          onClick={(e) => handleSelectCandidate(candidate, e)}
-          className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-sm font-medium"
-        >
-          Select
-        </button>
-      );
+      // Show NOTHING for final/rejected statuses
+      return null;
     } else {
-      // Fallback for any other status (shouldn't happen)
-      return (
-        <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded text-sm font-medium flex items-center gap-1">
-          <Clock size={14} />
-          In Progress
-        </span>
-      );
+      // For any other status, also show NOTHING
+      return null;
     }
   } else {
     // Not selected yet - show Select button
