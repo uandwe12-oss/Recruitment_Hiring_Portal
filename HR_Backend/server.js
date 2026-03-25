@@ -7,7 +7,7 @@ const swaggerJsdoc = require("swagger-jsdoc");
 const app = express();
 
 /* ================================
-CORS CONFIG (VERY IMPORTANT)
+   CORS CONFIG (FIXED FOR VERCEL)
 ================================ */
 
 const allowedOrigins = [
@@ -17,26 +17,29 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
+    // allow requests with no origin (like Postman)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
     } else {
-      callback(new Error("CORS not allowed"));
+      return callback(new Error("Not allowed by CORS"));
     }
   },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  credentials: true
 }));
 
-// Handle preflight requests
+// ✅ Handle preflight requests
 app.options("*", cors());
 
-/* Manual headers for Vercel */
+/* ================================
+   EXTRA HEADERS (VERY IMPORTANT)
+================================ */
+
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "https://myuandwe.vercel.app");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.header("Access-Control-Allow-Credentials", "true");
 
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
@@ -46,53 +49,28 @@ app.use((req, res, next) => {
 });
 
 /* ================================
-BODY PARSER
+   BODY PARSER
 ================================ */
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 /* ================================
-ROUTES IMPORT
+   ROUTES
 ================================ */
 
-const loginRoute = require("./api/login");
-const demandRoute = require("./api/demand");
-const candidatesRoute = require("./api/candidates");
-const skillsRoute = require("./api/skills");
-const skillsMatchRoute = require("./api/skillsmatch");
-const shortcandidatesRoute = require("./api/shortcandidates");
-const userRoute = require("./api/users");
-const selectedCandidatesRoutes = require("./api/selectedCandidates");
-const zoneRoutes = require("./api/zone");
+app.use("/api/login", require("./api/login"));
+app.use("/api/demand", require("./api/demand"));
+app.use("/api/candidates", require("./api/candidates"));
+app.use("/api/skills", require("./api/skills"));
+app.use("/api/skillsmatch", require("./api/skillsmatch"));
+app.use("/api/shortcandidates", require("./api/shortcandidates"));
+app.use("/api/users", require("./api/users"));
+app.use("/api/selected-candidates", require("./api/selectedCandidates"));
+app.use("/api/zone", require("./api/zone"));
 
 /* ================================
-ROUTE REGISTRATION
-================================ */
-
-app.use("/api/login", loginRoute);
-app.use("/api/demand", demandRoute);
-app.use("/api/candidates", candidatesRoute);
-app.use("/api/skills", skillsRoute);
-app.use("/api/skillsmatch", skillsMatchRoute);
-app.use("/api/shortcandidates", shortcandidatesRoute);
-app.use("/api/users", userRoute);
-app.use("/api/selected-candidates", selectedCandidatesRoutes);
-app.use("/api/zone", zoneRoutes);
-
-/* ================================
-AUTO CLEANUP FOR ZONE
-================================ */
-
-if (zoneRoutes.startAutoCleanup) {
-  console.log("🚀 Starting auto cleanup for Zone entries...");
-  zoneRoutes.startAutoCleanup();
-} else {
-  console.log("⚠️ startAutoCleanup function not found in zone module");
-}
-
-/* ================================
-SWAGGER CONFIG
+   SWAGGER CONFIG
 ================================ */
 
 const swaggerOptions = {
@@ -101,12 +79,11 @@ const swaggerOptions = {
     info: {
       title: "HR Backend API",
       version: "1.0.0",
-      description: "API documentation for HR Management System"
+      description: "API documentation"
     },
     servers: [
       {
-        url: "https://myuandwe-bg.vercel.app",
-        description: "Production Server"
+        url: "https://myuandwe-bg.vercel.app" // ✅ FIXED
       }
     ]
   },
@@ -117,26 +94,26 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 /* ================================
-TEST ENDPOINT
+   TEST ROUTE
 ================================ */
 
 app.get("/test", (req, res) => {
   res.json({
     success: true,
-    message: "Server is running!",
-    timestamp: new Date().toISOString()
+    message: "Server is running",
+    time: new Date()
   });
 });
 
 /* ================================
-ERROR HANDLING
+   ERROR HANDLER
 ================================ */
 
 app.use((err, req, res, next) => {
-  console.error("Server Error:", err.stack);
+  console.error("Server Error:", err);
   res.status(500).json({
     success: false,
-    message: "Internal server error"
+    message: err.message || "Internal Server Error"
   });
 });
 
