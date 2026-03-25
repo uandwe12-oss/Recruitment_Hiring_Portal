@@ -19,6 +19,119 @@ const parseKeySkills = (skills) => {
   return [];
 };
 
+// Helper function to convert Neo4j integer to number
+const toNumber = (value) => {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'object' && value.low !== undefined) {
+    return value.toNumber ? value.toNumber() : value.low;
+  }
+  return value;
+};
+
+// Add to Zone function
+const addToZone = async (driver, candidateId, demandId, clientName, status, reason, changedBy) => {
+  const session = driver.session();
+  
+  try {
+    console.log(`\n🔍 Checking if candidate ${candidateId} already in zone for client ${clientName}`);
+    
+    // Check if candidate already has ANY zone entry for this client
+    const existingCheck = await session.run(`
+      MATCH (z:Zone {candidateId: $candidateId, clientName: $clientName})
+      RETURN z
+      ORDER BY z.createdAt DESC
+      LIMIT 1
+    `, { 
+      candidateId: parseInt(candidateId), 
+      clientName: clientName 
+    });
+    
+    const now = new Date();
+    const expiryDate = new Date(now);
+    expiryDate.setMonth(expiryDate.getMonth() + 6);
+    
+    if (existingCheck.records.length > 0) {
+      // UPDATE existing entry
+      const existingZone = existingCheck.records[0].get('z').properties;
+      
+      // Create previous rejection as a JSON string (not a map/object)
+      const previousRejection = JSON.stringify({
+        demandId: toNumber(existingZone.demandId),
+        status: existingZone.rejectedStatus,
+        rejectedAt: existingZone.rejectedAt,
+        expiryDate: existingZone.expiryDate,
+        reason: existingZone.reason
+      });
+      
+      console.log(`🔄 Updating existing zone entry for candidate ${candidateId} with client ${clientName}`);
+      console.log(`   Old status: ${existingZone.rejectedStatus}, New status: ${status}`);
+      console.log(`   Old demand: ${existingZone.demandId}, New demand: ${demandId}`);
+      
+      await session.run(`
+        MATCH (z:Zone {candidateId: $candidateId, clientName: $clientName})
+        SET z.demandId = $demandId,
+            z.rejectedStatus = $status,
+            z.reason = $reason,
+            z.rejectedBy = $rejectedBy,
+            z.rejectedAt = $rejectedAt,
+            z.expiryDate = $expiryDate,
+            z.updatedAt = $updatedAt,
+            z.previousRejection = $previousRejection
+      `, {
+        candidateId: parseInt(candidateId),
+        clientName: clientName,
+        demandId: parseInt(demandId),
+        status: status,
+        reason: reason || `Rejected with status: ${status}`,
+        rejectedBy: changedBy,
+        rejectedAt: now.toISOString(),
+        expiryDate: expiryDate.toISOString(),
+        updatedAt: now.toISOString(),
+        previousRejection: previousRejection  // Store as JSON string
+      });
+      
+      console.log(`✅ Updated existing zone entry for candidate ${candidateId}`);
+      return true;
+    } else {
+      // CREATE new entry
+      console.log(`✨ Creating new zone entry for candidate ${candidateId} with client ${clientName}`);
+      
+      await session.run(`
+        CREATE (z:Zone {
+          candidateId: $candidateId,
+          demandId: $demandId,
+          clientName: $clientName,
+          rejectedStatus: $status,
+          reason: $reason,
+          rejectedBy: $rejectedBy,
+          rejectedAt: $rejectedAt,
+          expiryDate: $expiryDate,
+          createdAt: $createdAt,
+          updatedAt: $createdAt
+        })
+      `, {
+        candidateId: parseInt(candidateId),
+        demandId: parseInt(demandId),
+        clientName: clientName,
+        status: status,
+        reason: reason || `Rejected with status: ${status}`,
+        rejectedBy: changedBy,
+        rejectedAt: now.toISOString(),
+        expiryDate: expiryDate.toISOString(),
+        createdAt: now.toISOString()
+      });
+      
+      console.log(`✅ Created new zone entry for candidate ${candidateId}`);
+      return true;
+    }
+  } catch (err) {
+    console.error(`❌ Error adding/updating zone:`, err);
+    return false;
+  } finally {
+    await session.close();
+  }
+};
+
 /**
  * POST /api/selected-candidates/:demandId
  * Save selected candidates for a demand
@@ -219,7 +332,7 @@ router.get("/:demandId", async (req, res) => {
 
 /**
  * PUT /api/selected-candidates/status
- * Update candidate status with reason and track who did it
+ * Update candidate status with reason and track who did it (WITH ZONE INTEGRATION)
  */
 router.put("/status", async (req, res) => {
   const { candidateId, demandId, status, reason, changedBy } = req.body;
@@ -238,10 +351,10 @@ router.put("/status", async (req, res) => {
   const session = driver.session();
   
   try {
-    // First get the current relationship to get existing history
+    // First get the current relationship to get existing history and demand details
     const getResult = await session.run(`
       MATCH (d:Demand {id: $demandId})-[r:HAS_SELECTED_CANDIDATE]->(c:Candidate_Profile {Can_ID: $candidateId})
-      RETURN r
+      RETURN r, d
     `, {
       demandId: parseInt(demandId),
       candidateId: parseInt(candidateId)
@@ -255,6 +368,8 @@ router.put("/status", async (req, res) => {
     }
     
     const relationship = getResult.records[0].get('r').properties;
+    const demand = getResult.records[0].get('d').properties;
+    const clientName = demand.clientName;
     
     // Parse existing history
     let history = [];
@@ -304,6 +419,19 @@ router.put("/status", async (req, res) => {
     const updatedRelationship = updateResult.records[0].get('r').properties;
     const candidate = updateResult.records[0].get('c').properties;
     
+    // ADD TO ZONE FOR REJECTION STATUSES
+    const rejectionStatuses = [
+      'Offer Decline',
+      'Interview Reject',
+      'Client Interview Reject',
+      'Client Screening Reject'
+    ];
+    
+    if (rejectionStatuses.includes(status) && clientName) {
+      console.log(`🚫 Candidate rejected with status: ${status}. Adding to zone for client: ${clientName}`);
+      await addToZone(driver, candidateId, demandId, clientName, status, reason, changedByName);
+    }
+    
     console.log(`✅ Candidate ${candidateId} status updated to ${status}`);
     
     // Return updated info
@@ -318,7 +446,11 @@ router.put("/status", async (req, res) => {
         selectedAt: updatedRelationship.selectedAt,
         history: history,
         updatedAt: updatedRelationship.updatedAt,
-        updatedBy: updatedRelationship.updatedBy
+        updatedBy: updatedRelationship.updatedBy,
+        // Add zone info if applicable
+        inZone: rejectionStatuses.includes(status) ? true : false,
+        zoneExpiry: rejectionStatuses.includes(status) ? 
+          new Date(new Date().setMonth(new Date().getMonth() + 6)).toISOString() : null
       }
     });
     
