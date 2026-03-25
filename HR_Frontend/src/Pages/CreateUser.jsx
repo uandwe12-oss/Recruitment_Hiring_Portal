@@ -207,86 +207,93 @@ const CreateUser = () => {
       setClientSearchTerm(user.assignedClient);
     }
   };
+const handleUpdate = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setMessage({ type: "", text: "" });
 
-  const handleUpdate = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage({ type: "", text: "" });
-
-    try {
-      console.log(`Updating user ${editingUser.username} to role: ${formData.role}`);
-      
-      const response = await fetch(`https://myuandwe-bg.vercel.app/api/users/${encodeURIComponent(editingUser.username)}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ role: formData.role }),
-      });
-
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new Error("Server returned HTML. Backend might not be running.");
-      }
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to update user");
-      }
-
-      setMessage({ type: "success", text: "User updated successfully!" });
-      setEditingUser(null);
-      setFormData({
-        username: "",
-        password: "",
-        role: "Recruiter",
-        assignedClient: ""
-      });
-      setClientSearchTerm("");
-      
-      // Refresh user list
-      await fetchUsers();
-      
-    } catch (err) {
-      console.error("Error updating user:", err);
-      setMessage({ type: "error", text: err.message });
-    } finally {
-      setLoading(false);
+  try {
+    // Prepare update data
+    const updateData = { role: formData.role };
+    
+    // If role is Interviewer and assigned client is provided, include it
+    if (formData.role === "Interviewer" && formData.assignedClient) {
+      updateData.assignedClient = formData.assignedClient;
+      console.log(`Updating user ${editingUser.username} - Role: ${formData.role}, Client: ${formData.assignedClient}`);
+    } else {
+      console.log(`Updating user ${editingUser.username} - Role: ${formData.role}`);
     }
-  };
+    
+    const response = await fetch(`https://myuandwe-bg.vercel.app/api/users/${encodeURIComponent(editingUser.username)}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updateData),
+    });
 
-  const handleDelete = async (username) => {
-    if (!window.confirm(`Are you sure you want to delete user "${username}"?`)) {
-      return;
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const text = await response.text();
+      throw new Error("Server returned HTML. Backend might not be running.");
     }
 
-    try {
-      const response = await fetch(`https://myuandwe-bg.vercel.app/api/users/${encodeURIComponent(username)}`, {
-        method: "DELETE",
-      });
+    const data = await response.json();
 
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new Error("Server returned HTML. Backend might not be running.");
-      }
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to delete user");
-      }
-
-      setMessage({ type: "success", text: "User deleted successfully!" });
-      
-      // Refresh user list
-      await fetchUsers();
-    } catch (err) {
-      setMessage({ type: "error", text: err.message });
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to update user");
     }
-  };
+
+    setMessage({ type: "success", text: "User updated successfully!" });
+    setEditingUser(null);
+    setFormData({
+      username: "",
+      password: "",
+      role: "Recruiter",
+      assignedClient: ""
+    });
+    setClientSearchTerm("");
+    
+    // Refresh user list
+    await fetchUsers();
+    
+  } catch (err) {
+    console.error("Error updating user:", err);
+    setMessage({ type: "error", text: err.message });
+  } finally {
+    setLoading(false);
+  }
+};
+const handleDelete = async (username) => {
+  if (!window.confirm(`Are you sure you want to delete user "${username}"?`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`https://myuandwe-bg.vercel.app/api/users/${encodeURIComponent(username)}`, {
+      method: "DELETE",
+    });
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const text = await response.text();
+      throw new Error("Server returned HTML. Backend might not be running.");
+    }
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to delete user");
+    }
+
+    setMessage({ type: "success", text: "User deleted successfully!" });
+    
+    // Refresh user list
+    await fetchUsers();
+  } catch (err) {
+    setMessage({ type: "error", text: err.message });
+  }
+};
 
   const handleCancelEdit = () => {
     setEditingUser(null);
