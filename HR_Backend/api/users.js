@@ -169,7 +169,7 @@ router.post("/", async (req, res) => {
 
 /**
  * =================================================
- * PUT – Update User Role (Admin only)
+ * PUT – Update User (Role and Assigned Client)
  * =================================================
  */
 router.put("/:username", async (req, res) => {
@@ -178,10 +178,12 @@ router.put("/:username", async (req, res) => {
   const driver = getDriver();
   const session = driver.session();
   const { username } = req.params;
-  const { role } = req.body;
+  const { role, assignedClient } = req.body;
 
   try {
-    console.log(`📝 Updating user: ${username} to role: ${role}`);
+    console.log(`📝 Updating user: ${username}`);
+    console.log(`   New role: ${role}`);
+    if (assignedClient) console.log(`   New assigned client: ${assignedClient}`);
 
     if (!role) {
       return res.status(400).json({ 
@@ -204,22 +206,50 @@ router.put("/:username", async (req, res) => {
       });
     }
 
-    // Update user role
+    // Build update query based on role and assignedClient
+    let updateQuery = `MATCH (u:User {username: $username}) SET u.role = $role`;
+    const params = { username, role };
+    
+    // If role is Interviewer and assignedClient is provided, set it
+    if (role === "Interviewer" && assignedClient) {
+      updateQuery += `, u.assignedClient = $assignedClient`;
+      params.assignedClient = assignedClient;
+      console.log(`   Setting assigned client: ${assignedClient}`);
+    } 
+    // If role is not Interviewer, remove assignedClient if it exists
+    else if (role !== "Interviewer") {
+      updateQuery += ` REMOVE u.assignedClient`;
+      console.log(`   Removing assigned client (role is ${role})`);
+    }
+    // If role is Interviewer but no assignedClient provided, keep existing or set null
+    else if (role === "Interviewer" && !assignedClient) {
+      updateQuery += `, u.assignedClient = null`;
+      console.log(`   Setting assigned client to null`);
+    }
+    
+    // Execute update
+    await session.run(updateQuery, params);
+    
+    // Fetch updated user data
     const result = await session.run(
       `
       MATCH (u:User {username: $username})
-      SET u.role = $role
-      RETURN u.username as username, u.role as role, u.createdAt as createdAt
+      RETURN u.username as username, 
+             u.role as role, 
+             u.assignedClient as assignedClient,
+             u.createdAt as createdAt
       `,
-      { username, role }
+      { username }
     );
 
     const updatedUser = result.records[0];
     const updatedUsername = updatedUser.get("username");
     const updatedRole = updatedUser.get("role");
+    const updatedClient = updatedUser.get("assignedClient");
     const updatedDate = updatedUser.get("createdAt");
 
     console.log(`✅ User ${username} updated successfully to role: ${updatedRole}`);
+    if (updatedClient) console.log(`   Client: ${updatedClient}`);
 
     res.json({
       success: true,
@@ -227,6 +257,7 @@ router.put("/:username", async (req, res) => {
       user: {
         username: updatedUsername,
         role: updatedRole,
+        assignedClient: updatedClient || null,
         createdAt: updatedDate ? updatedDate.toString() : null
       }
     });
