@@ -8,7 +8,7 @@ const path = require("path");
 const app = express();
 
 const corsOptions = {
-  origin: "https://myuandwe.vercel.app",
+  origin: ["http://localhost:5173", "https://myuandwe.vercel.app"],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
@@ -32,6 +32,8 @@ const skillsMatchRoute = require("./api/skillsmatch");
 const shortcandidatesRoute = require("./api/shortcandidates");
 const userRoute = require("./api/users");
 const selectedCandidatesRoutes = require('./api/selectedCandidates');
+const zoneRoutes = require('./api/zone');
+
 /* ================================
 ROUTE REGISTRATION
 ================================ */
@@ -44,6 +46,20 @@ app.use("/api/skillsmatch", skillsMatchRoute);
 app.use("/api/shortcandidates", shortcandidatesRoute);
 app.use("/api/users", userRoute);
 app.use('/api/selected-candidates', selectedCandidatesRoutes);
+app.use('/api/zone', zoneRoutes);
+
+/* ================================
+START AUTO CLEANUP FOR ZONE
+================================ */
+
+// Start the auto cleanup for expired zone entries
+if (zoneRoutes.startAutoCleanup) {
+  console.log('🚀 Starting auto cleanup for Zone entries...');
+  zoneRoutes.startAutoCleanup();
+} else {
+  console.log('⚠️ Warning: startAutoCleanup function not found in zone module');
+  console.log('Available exports:', Object.keys(zoneRoutes));
+}
 
 /* ================================
 SWAGGER CONFIG
@@ -59,7 +75,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: "https://myuandwe-bg.vercel.app",
+        url: "http://localhost:5000",
         description: "Production Server"
       }
     ]
@@ -68,7 +84,6 @@ const swaggerOptions = {
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
-
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 /* ================================
@@ -76,11 +91,11 @@ TEST ENDPOINT
 ================================ */
 
 app.get("/test", (req, res) => {
-res.json({
-success: true,
-message: "Server is running!",
-timestamp: new Date().toISOString()
-});
+  res.json({
+    success: true,
+    message: "Server is running!",
+    timestamp: new Date().toISOString()
+  });
 });
 
 /* ================================
@@ -88,12 +103,11 @@ ERROR HANDLING
 ================================ */
 
 app.use((err, req, res, next) => {
-console.error("Server Error:", err.stack);
-
-res.status(500).json({
-success: false,
-message: "Internal server error"
-});
+  console.error("Server Error:", err.stack);
+  res.status(500).json({
+    success: false,
+    message: "Internal server error"
+  });
 });
 
 module.exports = app;
