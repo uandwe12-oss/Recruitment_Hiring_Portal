@@ -20,15 +20,15 @@ router.post("/", async (req, res) => {
   try {
     console.log(`\n📡 POST /api/login - Login attempt for user: ${username}`);
     
-    // MODIFIED: Also return u.name if it exists
-    const result = await session.run(
-      `MATCH (u:User {username: $username}) 
-       RETURN u.username AS username, 
-              u.passwordHash AS hash, 
-              u.role AS role,
-              u.name AS name`,
-      { username }
-    );
+const result = await session.run(
+  `MATCH (u:User {username: $username}) 
+   RETURN u.username AS username, 
+          u.passwordHash AS hash, 
+          u.role AS role,
+          u.name AS name,
+          u.assignedClient AS assignedClient`,  // ← ADD THIS LINE
+  { username }
+);
 
     // Check if user exists
     if (result.records.length === 0) {
@@ -60,15 +60,16 @@ router.post("/", async (req, res) => {
     console.log(`✅ Login successful for user: ${username} (Role: ${record.get("role")})`);
     console.log(`   Display name: ${userName}`);
     
-    res.json({
-      success: true,
-      message: "Login successful",
-      user: { 
-        username: record.get("username"),
-        name: userName, // ← ADD THIS
-        role: record.get("role") 
-      }
-    });
+res.json({
+  success: true,
+  message: "Login successful",
+  user: { 
+    username: record.get("username"),
+    name: userName,
+    role: record.get("role"),
+    clientName: record.get("assignedClient")  // ← ADD THIS LINE
+  }
+});
 
   } catch (err) {
     console.error("❌ Login error:", err);
