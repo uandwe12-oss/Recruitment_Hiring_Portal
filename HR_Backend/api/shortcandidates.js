@@ -58,10 +58,42 @@ const toNumber = (value) => {
   return value;
 };
 
+/**
+ * Get all candidates in Zone for a specific client
+ */
+const getCandidatesInZone = async (clientName) => {
+  const session = driver.session();
+  
+  try {
+    console.log(`🔍 Searching for Zone entries for client: ${clientName}`);
+    
+    // Convert expiryDate string to datetime for comparison
+    const result = await session.run(`
+      MATCH (z:Zone {clientName: $clientName})
+      WHERE datetime(z.expiryDate) > datetime()
+      RETURN collect(z.candidateId) as candidateIds
+    `, { clientName });
+    
+    const candidateIds = result.records[0].get('candidateIds');
+    const zoneCandidateIds = candidateIds.map(id => toNumber(id));
+    
+    console.log(`✅ Found ${zoneCandidateIds.length} active candidates in zone for client: ${clientName}`);
+    console.log(`   Candidate IDs: ${zoneCandidateIds.join(', ')}`);
+    
+    return zoneCandidateIds;
+  } catch (err) {
+    console.error("❌ Error getting candidates in zone:", err);
+    return [];
+  } finally {
+    await session.close();
+  }
+};
+
 router.use((req, res, next) => {
   const allowedOrigins = [
     "https://myuandwe.vercel.app",
-    "https://recruitment-hiring-portal-ibsf.vercel.app"
+    "https://recruitment-hiring-portal-ibsf.vercel.app",
+    "http://localhost:5173"
   ];
 
   const origin = req.headers.origin;
@@ -89,17 +121,17 @@ router.use((req, res, next) => {
 });
 
 // Extract skills array from profile
-const extractSkillsArray = (profile) => {
-  if (!profile.keySkills) return [];
+const extractSkillsArray = (skills) => {
+  if (!skills) return [];
   
-  if (Array.isArray(profile.keySkills)) {
-    return profile.keySkills;
-  } else if (typeof profile.keySkills === 'string') {
+  if (Array.isArray(skills)) {
+    return skills;
+  } else if (typeof skills === 'string') {
     try {
-      const parsed = JSON.parse(profile.keySkills);
+      const parsed = JSON.parse(skills);
       return Array.isArray(parsed) ? parsed : [parsed];
     } catch {
-      return profile.keySkills.split(',').map(s => s.trim()).filter(s => s);
+      return skills.split(',').map(s => s.trim()).filter(s => s);
     }
   }
   return [];
@@ -186,7 +218,7 @@ const formatProfileForResponse = (profile) => {
   const normalized = normalizeProfileFields(profile);
   
   // Ensure skills is always an array
-  normalized.keySkills = extractSkillsArray(normalized);
+  normalized.keySkills = extractSkillsArray(normalized.keySkills);
   
   return normalized;
 };
@@ -196,56 +228,8 @@ const formatProfileForResponse = (profile) => {
 // ============================================
 
 /**
- * @swagger
- * /api/shortcandidates/filter:
- *   get:
- *     summary: Filter candidate profiles by skills and experience
- *     description: Returns filtered and sorted candidate profiles based on primary skills, secondary skills, and experience range
- *     tags: [Candidate Profiles]
- *     parameters:
- *       - in: query
- *         name: primarySkills
- *         schema:
- *           type: string
- *         description: Comma-separated primary skills (e.g., "Java,Spring Boot")
- *       - in: query
- *         name: secondarySkills
- *         schema:
- *           type: string
- *         description: Comma-separated secondary skills (e.g., "Communication,Leadership")
- *       - in: query
- *         name: minExperience
- *         schema:
- *           type: number
- *           default: 0
- *         description: Minimum experience in years
- *       - in: query
- *         name: maxExperience
- *         schema:
- *           type: number
- *           default: 100
- *         description: Maximum experience in years
- *     responses:
- *       200:
- *         description: Successful response
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Candidate'
- *                 totalCount:
- *                   type: integer
- *                 filters:
- *                   type: object
- *       500:
- *         description: Server error
+ * GET /api/shortcandidates/filter
+ * Filter candidate profiles by skills, experience, and exclude candidates in Zone
  */
 router.get("/filter", async (req, res) => {
   console.log("\n📡 GET /api/shortcandidates/filter - Filtering candidate profiles");
@@ -256,7 +240,8 @@ router.get("/filter", async (req, res) => {
     primarySkills: primarySkillsParam, 
     secondarySkills: secondarySkillsParam,
     minExperience = 0,
-    maxExperience = 100
+    maxExperience = 100,
+    clientName  // NEW: Client name from demand to filter out Zone candidates
   } = req.query;
   
   // Parse comma-separated skills into arrays
@@ -271,10 +256,21 @@ router.get("/filter", async (req, res) => {
   console.log("Parsed primary skills:", primarySkills);
   console.log("Parsed secondary skills:", secondarySkills);
   console.log(`Experience range: ${minExperience} - ${maxExperience} years`);
+  console.log(`Client name for Zone filtering: ${clientName || 'None'}`);
   
   const session = driver.session();
   
   try {
+    // Get candidates in Zone for this client (if clientName provided)
+    let zoneCandidateIds = [];
+    if (clientName) {
+      zoneCandidateIds = await getCandidatesInZone(clientName);
+      console.log(`🚫 Will exclude ${zoneCandidateIds.length} candidates in Zone for client: ${clientName}`);
+      if (zoneCandidateIds.length > 0) {
+        console.log(`   Excluded candidate IDs: ${zoneCandidateIds.join(', ')}`);
+      }
+    }
+    
     // Get all candidate profiles
     const result = await session.run(`
       MATCH (c:Candidate_Profile)
@@ -282,7 +278,7 @@ router.get("/filter", async (req, res) => {
       ORDER BY c.id DESC
     `);
     
-    console.log(`📊 Found ${result.records.length} candidate profiles`);
+    console.log(`📊 Found ${result.records.length} total candidate profiles`);
     
     // Format all profiles
     const allProfiles = result.records.map(r => {
@@ -295,11 +291,25 @@ router.get("/filter", async (req, res) => {
       return formatted;
     });
     
-    // First apply experience filter
+    // First, filter out candidates in Zone
+    let filteredProfiles = allProfiles;
+    if (zoneCandidateIds.length > 0) {
+      filteredProfiles = allProfiles.filter(profile => {
+        const candidateId = profile.canId || profile.id;
+        const isInZone = zoneCandidateIds.includes(candidateId);
+        if (isInZone) {
+          console.log(`   Excluding candidate ${candidateId} (${profile.name}) - in Zone for ${clientName}`);
+        }
+        return !isInZone;
+      });
+      console.log(`📊 After Zone filter: ${filteredProfiles.length} candidates remaining`);
+    }
+    
+    // Apply experience filter
     const minExp = parseFloat(minExperience) || 0;
     const maxExp = parseFloat(maxExperience) || 100;
     
-    const filteredByExperience = allProfiles.filter(profile => {
+    const filteredByExperience = filteredProfiles.filter(profile => {
       const expYears = profile.experienceYears || 0;
       return expYears >= minExp && expYears <= maxExp;
     });
@@ -317,11 +327,13 @@ router.get("/filter", async (req, res) => {
         success: true,
         data: sortedByExperience,
         totalCount: sortedByExperience.length,
+        excludedZoneCount: zoneCandidateIds.length,
         filters: {
           primarySkills: [],
           secondarySkills: [],
           minExperience: minExp,
-          maxExperience: maxExp
+          maxExperience: maxExp,
+          clientName: clientName || null
         }
       });
     }
@@ -386,9 +398,7 @@ router.get("/filter", async (req, res) => {
     });
     
     // Filter out candidates with no matches if there are search skills
-    // This removes candidates with category > 5 (no matches) - but with our logic, all have category 1-5 now
     const matchedCandidates = scoredCandidates.filter(c => {
-      // Keep if they match either primary or secondary skills
       if (primarySkills.length > 0 && secondarySkills.length > 0) {
         return c.matchScore.primaryMatches > 0 || c.matchScore.secondaryMatches > 0;
       } else if (primarySkills.length > 0) {
@@ -400,13 +410,13 @@ router.get("/filter", async (req, res) => {
     });
     
     // Separate matched candidates by category
-    const category1 = matchedCandidates.filter(c => c.matchScore.category === 1); // ALL primary + ALL secondary
-    const category2 = matchedCandidates.filter(c => c.matchScore.category === 2); // ALL primary only
-    const category3 = matchedCandidates.filter(c => c.matchScore.category === 3); // SOME primary only
-    const category4 = matchedCandidates.filter(c => c.matchScore.category === 4); // ALL secondary only
-    const category5 = matchedCandidates.filter(c => c.matchScore.category === 5); // SOME secondary only
+    const category1 = matchedCandidates.filter(c => c.matchScore.category === 1);
+    const category2 = matchedCandidates.filter(c => c.matchScore.category === 2);
+    const category3 = matchedCandidates.filter(c => c.matchScore.category === 3);
+    const category4 = matchedCandidates.filter(c => c.matchScore.category === 4);
+    const category5 = matchedCandidates.filter(c => c.matchScore.category === 5);
     
-    // Sort each category by experience in descending order (highest experience first)
+    // Sort each category by experience in descending order
     const sortByExperienceDesc = (a, b) => (b.experienceYears || 0) - (a.experienceYears || 0);
     
     category1.sort(sortByExperienceDesc);
@@ -420,33 +430,26 @@ router.get("/filter", async (req, res) => {
     
     const totalCount = sortedCandidates.length;
     
-    console.log(`📊 Filtered candidates found: ${totalCount}`);
+    console.log(`📊 Final filtered candidates: ${totalCount}`);
     console.log(`   Category distribution:`, {
-      category1: category1.length, // ALL primary + ALL secondary
-      category2: category2.length, // ALL primary only
-      category3: category3.length, // SOME primary only
-      category4: category4.length, // ALL secondary only
-      category5: category5.length  // SOME secondary only
+      category1: category1.length,
+      category2: category2.length,
+      category3: category3.length,
+      category4: category4.length,
+      category5: category5.length
     });
-    console.log(`   Experience range: ${minExp}-${maxExp} years`);
-    
-    // Log first few candidates for debugging
-    if (sortedCandidates.length > 0) {
-      console.log("   Sample of first 5 candidates:");
-      sortedCandidates.slice(0, 5).forEach((c, idx) => {
-        console.log(`     ${idx+1}. ${c.name} - Category: ${c.matchScore.category} - Exp: ${c.experienceYears} years - Skills: ${c.keySkills.slice(0, 3).join(', ')}...`);
-      });
-    }
     
     res.json({
       success: true,
       data: sortedCandidates,
       totalCount: totalCount,
+      excludedZoneCount: zoneCandidateIds.length,
       filters: {
         primarySkills,
         secondarySkills,
         minExperience: minExp,
-        maxExperience: maxExp
+        maxExperience: maxExp,
+        clientName: clientName || null
       }
     });
     
@@ -462,52 +465,24 @@ router.get("/filter", async (req, res) => {
   }
 });
 
-
 /**
- * @swagger
- * /api/shortcandidates:
- *   get:
- *     summary: Get all candidate profiles
- *     description: Returns a list of all candidate profiles sorted by experience (highest first)
- *     tags: [Candidate Profiles]
- *     parameters:
- *       - in: query
- *         name: minExperience
- *         schema:
- *           type: number
- *         description: Filter by minimum experience
- *       - in: query
- *         name: maxExperience
- *         schema:
- *           type: number
- *         description: Filter by maximum experience
- *     responses:
- *       200:
- *         description: Successful response
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Candidate'
- *                 totalCount:
- *                   type: integer
- *       500:
- *         description: Server error
+ * GET /api/shortcandidates
+ * Get all candidate profiles (excluding Zone candidates if clientName provided)
  */
 router.get("/", async (req, res) => {
   console.log("\n📡 GET /api/shortcandidates - Fetching all candidate profiles");
   
-  const { minExperience, maxExperience } = req.query;
+  const { minExperience, maxExperience, clientName } = req.query;
   const session = driver.session();
   
   try {
+    // Get candidates in Zone for this client (if clientName provided)
+    let zoneCandidateIds = [];
+    if (clientName) {
+      zoneCandidateIds = await getCandidatesInZone(clientName);
+      console.log(`🚫 Will exclude ${zoneCandidateIds.length} candidates in Zone for client: ${clientName}`);
+    }
+    
     // Get all candidate profiles
     const result = await session.run(`
       MATCH (c:Candidate_Profile)
@@ -515,7 +490,7 @@ router.get("/", async (req, res) => {
       ORDER BY c.id DESC
     `);
     
-    console.log(`📊 Found ${result.records.length} candidate profiles`);
+    console.log(`📊 Found ${result.records.length} total candidate profiles`);
     
     let profiles = result.records.map(r => {
       const profile = r.get("c").properties;
@@ -523,6 +498,19 @@ router.get("/", async (req, res) => {
       formatted.experienceYears = parseExperience(formatted.experience);
       return formatted;
     });
+    
+    // Filter out Zone candidates
+    if (zoneCandidateIds.length > 0) {
+      profiles = profiles.filter(profile => {
+        const candidateId = profile.canId || profile.id;
+        const isInZone = zoneCandidateIds.includes(candidateId);
+        if (isInZone) {
+          console.log(`   Excluding candidate ${candidateId} (${profile.name}) - in Zone for ${clientName}`);
+        }
+        return !isInZone;
+      });
+      console.log(`📊 After Zone filter: ${profiles.length} candidates remaining`);
+    }
     
     // Apply experience filters if provided
     if (minExperience !== undefined || maxExperience !== undefined) {
@@ -543,7 +531,8 @@ router.get("/", async (req, res) => {
     res.json({
       success: true,
       data: profiles,
-      totalCount: profiles.length
+      totalCount: profiles.length,
+      excludedZoneCount: zoneCandidateIds.length
     });
     
   } catch (err) {
@@ -559,36 +548,8 @@ router.get("/", async (req, res) => {
 });
 
 /**
- * @swagger
- * /api/shortcandidates/{candidateId}:
- *   get:
- *     summary: Get a specific candidate profile by ID
- *     description: Returns a single candidate profile
- *     tags: [Candidate Profiles]
- *     parameters:
- *       - in: path
- *         name: candidateId
- *         required: true
- *         schema:
- *           type: integer
- *         description: Candidate ID
- *     responses:
- *       200:
- *         description: Successful response
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/Candidate'
- *       404:
- *         description: Candidate not found
- *       500:
- *         description: Server error
+ * GET /api/shortcandidates/:candidateId
+ * Get a specific candidate profile by ID
  */
 router.get("/:candidateId", async (req, res) => {
   console.log(`\n📡 GET /api/shortcandidates/${req.params.candidateId}`);
