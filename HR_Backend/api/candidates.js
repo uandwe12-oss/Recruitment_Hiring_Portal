@@ -232,28 +232,22 @@ const toNumber = (value) => {
 };
 
 router.use((req, res, next) => {
-  const allowedOrigins = [
-    'http://localhost:5173',
-    'https://myuandwe.vercel.app'
-  ];
+  res.header(
+    'Access-Control-Allow-Origin',
+    'http://localhost:5173'
+  );
 
-  const origin = req.headers.origin;
-
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-
-  res.setHeader(
+  res.header(
     'Access-Control-Allow-Headers',
     'Origin, X-Requested-With, Content-Type, Accept, Authorization'
   );
 
-  res.setHeader(
+  res.header(
     'Access-Control-Allow-Methods',
     'GET, POST, PUT, DELETE, OPTIONS'
   );
 
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Credentials', 'true');
 
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -359,7 +353,11 @@ const formatProfileForResponse = (profile) => {
   const normalized = normalizeProfileFields(profile);
   
   // Ensure skills is always an array
-  normalized.keySkills = extractSkillsArray(normalized);
+  normalized.keySkills = extractSkillsArray(normalized.keySkills);
+  
+  // ✅ ADD isInProgress field to response
+  normalized.isInProgress = profile.isInProgress || false;
+  normalized.lastStatusUpdate = profile.lastStatusUpdate;
   
   return normalized;
 };
@@ -998,30 +996,33 @@ router.post("/", upload.single('resume'), async (req, res) => {
       keySkills = keySkills ? [keySkills] : [];
     }
 
-    // Prepare profile data
-    const profileData = {
-      "Candidate Name": req.body.name,
-      "Email": req.body.email,
-      "Mobile No": req.body.mobile,
-      "Experience": req.body.experience || "",
-      "Current Org": req.body.currentOrg || "",
-      "Current CTC": req.body.currentCTC || "",
-      "Expected CTC": req.body.expectedCTC || "",
-      "Notice Period in days": req.body.noticePeriod || "",
-      "Profiles sourced by": req.body.profileSourcedBy || "",
-      "Client Name": req.body.clientName || "",
-      "Profile submission date": req.body.profileSubmissionDate || "",
-      "Key Skills": keySkills,
-      "Can_ID": nextCanId,
-      "Visa type": req.body.visaType || "NA",
-      "resumePath": resumePath,
-      "googleDriveFileId": googleDriveFileId,
-      "googleDriveViewLink": googleDriveViewLink,
-      "googleDriveDownloadLink": googleDriveDownloadLink,
-      "createdAt": new Date().toISOString(),
-      "updatedAt": new Date().toISOString(),
-      "id": nextCanId
-    };
+// Prepare profile data
+const profileData = {
+  "Candidate Name": req.body.name,
+  "Email": req.body.email,
+  "Mobile No": req.body.mobile,
+  "Experience": req.body.experience || "",
+  "Current Org": req.body.currentOrg || "",
+  "Current CTC": req.body.currentCTC || "",
+  "Expected CTC": req.body.expectedCTC || "",
+  "Notice Period in days": req.body.noticePeriod || "",
+  "Profiles sourced by": req.body.profileSourcedBy || "",
+  "Client Name": req.body.clientName || "",
+  "Profile submission date": req.body.profileSubmissionDate || "",
+  "Key Skills": keySkills,
+  "Can_ID": nextCanId,
+  "Visa type": req.body.visaType || "NA",
+  "resumePath": resumePath,
+  "googleDriveFileId": googleDriveFileId,
+  "googleDriveViewLink": googleDriveViewLink,
+  "googleDriveDownloadLink": googleDriveDownloadLink,
+  "createdAt": new Date().toISOString(),
+  "updatedAt": new Date().toISOString(),
+  "id": nextCanId,
+  // ✅ ADD THIS FLAG
+  "isInProgress": false,  // false = not in progress, true = in progress
+  "lastStatusUpdate": new Date().toISOString()
+};
 
     console.log("Saving candidate profile with Can_ID:", nextCanId);
     console.log("Skills:", keySkills);
@@ -1059,6 +1060,130 @@ router.post("/", upload.single('resume'), async (req, res) => {
       success: false,
       message: "Failed to create candidate profile",
       error: err.message
+    });
+  } finally {
+    await session.close();
+  }
+});
+
+/**
+ * PUT /api/candidates/:id/progress
+ * Update candidate's in-progress status based on demand selection
+ */
+router.put("/:id/progress", async (req, res) => {
+  console.log(`\n📡 PUT /api/candidates/${req.params.id}/progress - Updating in-progress status`);
+  
+  const session = driver.session();
+  const candidateId = parseInt(req.params.id);
+  const { isInProgress } = req.body;
+
+  try {
+    // Check if candidate exists
+    const checkResult = await session.run(
+      "MATCH (c:Candidate_Profile) WHERE c.Can_ID = $id RETURN c",
+      { id: candidateId }
+    );
+
+    if (!checkResult.records.length) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Candidate not found" 
+      });
+    }
+
+    // Update the isInProgress flag
+    const result = await session.run(
+      `MATCH (c:Candidate_Profile) WHERE c.Can_ID = $id
+       SET c.isInProgress = $isInProgress,
+           c.lastStatusUpdate = $lastUpdate
+       RETURN c`,
+      { 
+        id: candidateId, 
+        isInProgress: isInProgress,
+        lastUpdate: new Date().toISOString()
+      }
+    );
+
+    const updated = result.records[0].get("c").properties;
+    
+    console.log(`✅ Candidate ${candidateId} in-progress status updated to: ${isInProgress}`);
+
+    res.json({
+      success: true,
+      message: `Candidate in-progress status updated to ${isInProgress}`,
+      data: {
+        candidateId: candidateId,
+        isInProgress: isInProgress,
+        lastStatusUpdate: updated.lastStatusUpdate
+      }
+    });
+    
+  } catch (err) {
+    console.error(`❌ Error updating in-progress status for candidate ${candidateId}:`, err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to update candidate status",
+      error: err.message 
+    });
+  } finally {
+    await session.close();
+  }
+});
+
+/**
+ * POST /api/candidates/progress/batch
+ * Get in-progress status for multiple candidates at once
+ */
+router.post("/progress/batch", async (req, res) => {
+  console.log(`\n📡 POST /api/candidates/progress/batch - Getting batch progress status`);
+  
+  const session = driver.session();
+  const { candidateIds } = req.body;
+
+  if (!candidateIds || !Array.isArray(candidateIds) || candidateIds.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "candidateIds array is required"
+    });
+  }
+
+  try {
+    const results = [];
+    
+    for (const candidateId of candidateIds) {
+      const result = await session.run(
+        "MATCH (c:Candidate_Profile) WHERE c.Can_ID = $id RETURN c.isInProgress as isInProgress",
+        { id: parseInt(candidateId) }
+      );
+      
+      const isInProgress = result.records.length > 0 ? result.records[0].get('isInProgress') || false : false;
+      
+      results.push({
+        candidateId: parseInt(candidateId),
+        isInProgress: isInProgress
+      });
+    }
+    
+    const inProgressCount = results.filter(r => r.isInProgress).length;
+    
+    console.log(`✅ Batch status: ${inProgressCount}/${candidateIds.length} candidates are in progress`);
+
+    res.json({
+      success: true,
+      data: results,
+      summary: {
+        total: candidateIds.length,
+        inProgress: inProgressCount,
+        notInProgress: candidateIds.length - inProgressCount
+      }
+    });
+    
+  } catch (err) {
+    console.error(`❌ Error fetching batch progress status:`, err);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch candidate statuses",
+      error: err.message 
     });
   } finally {
     await session.close();
