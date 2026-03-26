@@ -140,7 +140,7 @@ useEffect(() => {
   };
 const openStatusEditModal = (candidate) => {
   setSelectedStatusCandidate(candidate);
-  setSelectedNewStatus(''); // Don't pre-select current status
+  setSelectedNewStatus(candidate.status);  // ← This sets it to the current status, not what you want
   setStatusReason('');
   setShowStatusEditModal(true);
 };
@@ -154,67 +154,6 @@ const viewCandidateHistory = (candidate) => {
     demandRrNumber: selectedDemandDetails?.rrNumber || `RR${String(selectedDemandId).padStart(3, "0")}`
   });
   setShowHistoryModal(true);
-};
-
-const handleStatusUpdate = async () => {
-  // Get the current values directly from state
-  const currentStatus = selectedNewStatus;
-  const currentReason = statusReason;
-  const currentCandidate = selectedStatusCandidate;
-  const currentDemandId = selectedDemandId;
-  
-  console.log("🔍 handleStatusUpdate called");
-  console.log("Current status from state:", currentStatus);
-  console.log("Current candidate:", currentCandidate);
-  
-  if (!currentStatus || !currentReason.trim() || !currentCandidate) return;
-  
-  try {
-    setStatusLoading(true);
-    
-    const user = JSON.parse(localStorage.getItem("user")) || {};
-    const changedBy = user.name || user.username || 'Unknown';
-    
-    const requestBody = {
-      candidateId: currentCandidate.id,
-      demandId: currentDemandId,
-      status: currentStatus,
-      reason: currentReason,
-      changedBy: changedBy
-    };
-    
-    console.log("Sending PUT request with body:", requestBody);
-    
-    const response = await axios.put(`https://myuandwe-bg.vercel.app/api/selected-candidates/status`, requestBody);
-
-    console.log("Response from server:", response.data);
-
-    if (response.data.success) {
-      console.log("✅ Status update successful, refreshing candidates...");
-      
-      const updatedCandidates = await fetchSelectedCandidates(currentDemandId);
-      setCurrentSelectedCandidates(updatedCandidates);
-      setSelectedCandidates(prev => ({
-        ...prev,
-        [currentDemandId]: updatedCandidates
-      }));
-      
-      setShowStatusEditModal(false);
-      setSelectedStatusCandidate(null);
-      setSelectedNewStatus('');
-      setStatusReason('');
-      
-      //alert(`Status updated to ${currentStatus}!`);
-    } else {
-      console.error("❌ Update failed - response success false");
-      alert('Failed to update status');
-    }
-  } catch (err) {
-    console.error('❌ Error updating status:', err);
-    alert('Failed to update status: ' + (err.response?.data?.message || err.message));
-  } finally {
-    setStatusLoading(false);
-  }
 };
 
 // Handle candidate status change with reason
@@ -813,18 +752,18 @@ const handleViewCandidates = (demand) => {
   };
 
 const updateCandidateStatus = async (newStatus) => {
-  console.log("🔍 updateCandidateStatus called with status:", newStatus);
-  console.log("🔍 Status reason:", statusReason);
-  console.log("🔍 Selected candidate:", selectedStatusCandidate);
+  if (!newStatus || !statusReason.trim() || !selectedStatusCandidate) return;
   
-  if (!newStatus || !statusReason.trim() || !selectedStatusCandidate) {
-    console.log("❌ Missing required fields:", {
-      newStatus: !!newStatus,
-      reason: !!statusReason.trim(),
-      candidate: !!selectedStatusCandidate
-    });
-    return;
-  }
+  console.log("🔍 updateCandidateStatus called with status:", newStatus);
+  
+  // Define final statuses
+  const finalStatuses = [
+    'Offer Decline', 
+    'Interview Reject', 
+    'Client Interview Reject', 
+    'Screening Reject', 
+    'Client Screening Reject'
+  ];
   
   try {
     setStatusLoading(true);
@@ -840,20 +779,20 @@ const updateCandidateStatus = async (newStatus) => {
       changedBy: changedBy
     };
     
-    console.log("Sending PUT request with body:", requestBody);
-    
     const response = await axios.put(`https://myuandwe-bg.vercel.app/api/selected-candidates/status`, requestBody);
-
-    console.log("Response from server:", response.data);
 
     if (response.data.success) {
       console.log("✅ Status update successful, refreshing candidates...");
       
       const updatedCandidates = await fetchSelectedCandidates(selectedDemandId);
-      setCurrentSelectedCandidates(updatedCandidates);
+      
+      // Filter out candidates with final statuses before displaying
+      const filteredCandidates = updatedCandidates.filter(c => !finalStatuses.includes(c.status));
+      
+      setCurrentSelectedCandidates(filteredCandidates);
       setSelectedCandidates(prev => ({
         ...prev,
-        [selectedDemandId]: updatedCandidates
+        [selectedDemandId]: filteredCandidates
       }));
       
       setShowStatusEditModal(false);
@@ -861,7 +800,6 @@ const updateCandidateStatus = async (newStatus) => {
       setStatusReason('');
       setSelectedNewStatus('');
       
-      //alert(`Status updated to ${newStatus}!`);
     } else {
       console.error("❌ Update failed - response success false");
       alert('Failed to update status');
@@ -1659,7 +1597,6 @@ const updateCandidateStatus = async (newStatus) => {
   </div>
 )}
 
-
 {/* Status Edit Modal */}
 {showStatusEditModal && selectedStatusCandidate && (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
@@ -1688,19 +1625,20 @@ const updateCandidateStatus = async (newStatus) => {
         </p>
         
         <div className="space-y-4">
-          {/* Status Selection */}
+          {/* Status Selection - Using local state with useState inside modal */}
           <div>
             <label className="block text-sm font-medium mb-2">Select New Status</label>
-            <select
-              value={selectedNewStatus}
-              onChange={(e) => {
-                const newValue = e.target.value;
-                console.log("📝 Dropdown changed to:", newValue);
-                setSelectedNewStatus(newValue);
+           <select
+  value={selectedNewStatus}
+  onChange={(e) => {
+    const newValue = e.target.value;
+    console.log("📝 Dropdown changed to:", newValue);
+    setSelectedNewStatus(newValue);
+                // Also store in localStorage for debugging
+                localStorage.setItem('temp_selected_status', newValue);
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="" disabled>-- Select Status --</option>
               <option value="Pending Screening">Pending Screening</option>
               <option value="Pending Interview">Pending Interview</option>
               <option value="Pending Client Screening">Pending Client Screening</option>
@@ -1743,36 +1681,32 @@ const updateCandidateStatus = async (newStatus) => {
             Cancel
           </button>
           <button
-            onClick={() => {
-              console.log("🔍 Update button clicked - selectedNewStatus:", selectedNewStatus);
-              console.log("🔍 Status reason:", statusReason);
-              
-              if (selectedNewStatus && statusReason.trim()) {
-                // Make sure we're passing the exact status string
-                updateCandidateStatus(selectedNewStatus);
-              } else {
-                alert('Please select a status and provide a reason');
-              }
-            }}
-            disabled={!selectedNewStatus || !statusReason.trim()}
-            className={`px-6 py-2 rounded-lg transition flex items-center gap-2 ${
-              !selectedNewStatus || !statusReason.trim()
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-          >
-            {statusLoading ? (
-              <>
-                <Loader size={16} className="animate-spin" />
-                Updating...
-              </>
-            ) : (
-              <>
-                <CheckCircle size={16} />
-                Update Status
-              </>
-            )}
-          </button>
+  onClick={() => {
+    if (selectedNewStatus && statusReason.trim()) {
+      updateCandidateStatus(selectedNewStatus);
+    } else {
+      alert('Please select a status and provide a reason');
+    }
+  }}
+  disabled={!statusReason.trim()}
+  className={`px-6 py-2 rounded-lg transition flex items-center gap-2 ${
+    !statusReason.trim()
+      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+      : 'bg-blue-600 text-white hover:bg-blue-700'
+  }`}
+>
+  {statusLoading ? (
+    <>
+      <Loader size={16} className="animate-spin" />
+      Updating...
+    </>
+  ) : (
+    <>
+      <CheckCircle size={16} />
+      Update Status
+    </>
+  )}
+</button>
         </div>
       </div>
     </div>
