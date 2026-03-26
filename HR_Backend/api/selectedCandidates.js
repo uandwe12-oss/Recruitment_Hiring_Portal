@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-
+const axios = require('axios');
 // Import the shared driver helper
 const getDriver = require("../lib/neo4j");
 
@@ -419,6 +419,30 @@ router.put("/status", async (req, res) => {
     const updatedRelationship = updateResult.records[0].get('r').properties;
     const candidate = updateResult.records[0].get('c').properties;
     
+  
+    
+   // ✅ MOVED THIS INSIDE try block - UPDATE CANDIDATE'S isInProgress FLAG
+const pendingStatuses = [
+  'Pending Screening',
+  'Pending Interview',
+  'Pending Client Screening',
+  'Pending Client Interview',
+  'Pending Offer',
+  'Pending Joinee'
+];
+
+const isInProgress = pendingStatuses.includes(status);
+
+try {
+  await axios.put(`http://localhost:5000/api/candidates/${candidateId}/progress`, {
+    isInProgress: isInProgress
+  });
+  console.log(`✅ Updated candidate ${candidateId} isInProgress to ${isInProgress}`);
+} catch (syncErr) {
+  console.error('⚠️ Failed to sync progress status:', syncErr.message);
+  // Don't fail the main request if sync fails
+}
+    
     // ADD TO ZONE FOR REJECTION STATUSES
     const rejectionStatuses = [
       'Offer Decline',
@@ -447,6 +471,7 @@ router.put("/status", async (req, res) => {
         history: history,
         updatedAt: updatedRelationship.updatedAt,
         updatedBy: updatedRelationship.updatedBy,
+        isInProgress: isInProgress, // ✅ Add this to response
         // Add zone info if applicable
         inZone: rejectionStatuses.includes(status) ? true : false,
         zoneExpiry: rejectionStatuses.includes(status) ? 
