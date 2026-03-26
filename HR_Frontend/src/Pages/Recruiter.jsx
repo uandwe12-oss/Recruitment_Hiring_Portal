@@ -2089,8 +2089,18 @@ useEffect(() => {
       try {
         const response = await axios.get(`https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`);
         if (response.data.success) {
-          // ⭐ REMOVE THE isActiveStatus FILTER - keep ALL candidates
+          // ✅ ADD THIS - Define final statuses that should NOT be shown as selected
+          const finalStatuses = [
+            'Offer Decline', 
+            'Interview Reject', 
+            'Client Interview Reject', 
+            'Screening Reject', 
+            'Client Screening Reject'
+          ];
+          
+          // ✅ FILTER OUT candidates with final/rejected statuses
           const existingCandidates = response.data.data
+            .filter(selected => !finalStatuses.includes(selected.status)) // ← ADD THIS LINE
             .map(selected => {
               const matchingCandidate = candidates.find(c => c.id === selected.id);
               return {
@@ -2099,10 +2109,11 @@ useEffect(() => {
                 history: selected.history
               };
             })
-            .filter(c => c !== undefined); // Only remove if candidate doesn't exist
+            .filter(c => c !== undefined);
           
           setSelectedCandidates(existingCandidates);
-          console.log("Loaded selected candidates with statuses:", existingCandidates.map(c => ({ name: c.name, status: c.status })));
+          console.log("Loaded active selected candidates:", existingCandidates.map(c => ({ name: c.name, status: c.status })));
+          console.log("Excluded final/rejected candidates:", response.data.data.filter(s => finalStatuses.includes(s.status)).length);
         }
       } catch (err) {
         console.error('Error fetching existing selections:', err);
@@ -2123,6 +2134,50 @@ useEffect(() => {
   };
   
   // Refresh when window gets focus (user returns to tab)
+  window.addEventListener('focus', refreshSelections);
+  
+  return () => {
+    window.removeEventListener('focus', refreshSelections);
+  };
+}, [searchParams, candidates]);
+
+// Refresh selected candidates when window gets focus
+useEffect(() => {
+  const refreshSelections = async () => {
+    const demandId = searchParams.get('demandId');
+    if (demandId && candidates.length > 0) {
+      try {
+        const response = await axios.get(`https://myuandwe-bg.vercel.app/api/selected-candidates/${demandId}`);
+        if (response.data.success) {
+          const finalStatuses = [
+            'Offer Decline', 
+            'Interview Reject', 
+            'Client Interview Reject', 
+            'Screening Reject', 
+            'Client Screening Reject'
+          ];
+          
+          const existingCandidates = response.data.data
+            .filter(selected => !finalStatuses.includes(selected.status))
+            .map(selected => {
+              const matchingCandidate = candidates.find(c => c.id === selected.id);
+              return {
+                ...matchingCandidate,
+                status: selected.status,
+                history: selected.history
+              };
+            })
+            .filter(c => c !== undefined);
+          
+          setSelectedCandidates(existingCandidates);
+        }
+      } catch (err) {
+        console.error('Error refreshing selections:', err);
+      }
+    }
+  };
+  
+  // Refresh when window gets focus (user returns to tab after updating status)
   window.addEventListener('focus', refreshSelections);
   
   return () => {
@@ -2759,7 +2814,7 @@ useEffect(() => {
     'Client Interview Reject', 
     'Screening Reject', 
     'Client Screening Reject',
-    'Selected' // If Selected is also a final status
+    // If Selected is also a final status
   ];
   
   if (selectedInfo) {
