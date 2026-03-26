@@ -204,7 +204,7 @@ const handleStatusUpdate = async () => {
       setSelectedNewStatus('');
       setStatusReason('');
       
-      alert(`Status updated to ${currentStatus}!`);
+      //alert(`Status updated to ${currentStatus}!`);
     } else {
       console.error("❌ Update failed - response success false");
       alert('Failed to update status');
@@ -861,7 +861,7 @@ const updateCandidateStatus = async (newStatus) => {
       setStatusReason('');
       setSelectedNewStatus('');
       
-      alert(`Status updated to ${newStatus}!`);
+      //alert(`Status updated to ${newStatus}!`);
     } else {
       console.error("❌ Update failed - response success false");
       alert('Failed to update status');
