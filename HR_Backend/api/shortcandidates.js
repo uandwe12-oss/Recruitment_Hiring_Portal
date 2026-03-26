@@ -213,6 +213,7 @@ const normalizeProfileFields = (profile) => {
   return normalized;
 };
 
+
 // Format profile for response
 const formatProfileForResponse = (profile) => {
   const normalized = normalizeProfileFields(profile);
@@ -220,8 +221,11 @@ const formatProfileForResponse = (profile) => {
   // Ensure skills is always an array
   normalized.keySkills = extractSkillsArray(normalized.keySkills);
   
+  // ✅ ADD THIS ONE LINE - Include isInProgress flag
+  normalized.isInProgress = profile.isInProgress || false;
+  
   return normalized;
-};
+};;
 
 // ============================================
 // SHORTLISTED CANDIDATES ROUTES
