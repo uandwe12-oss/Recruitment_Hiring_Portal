@@ -890,27 +890,29 @@ const autoFilterFromDemand = async () => {
     }));
   };
 
-  // Handle edit PDF upload - WITH SIZE VALIDATION
-  const handleEditPdfUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.type !== 'application/pdf') {
-        alert('Please upload a PDF file');
-        e.target.value = '';
-        return;
-      }
-      
-      const maxSize = 100 * 1024;
-      if (file.size > maxSize) {
-        alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
-        e.target.value = '';
-        return;
-      }
-      
-      setEditPdfFile(file);
-      setEditFormData(prev => ({ ...prev, resumePdf: file }));
+  // Handle edit PDF upload with 10MB limit
+const handleEditPdfUpload = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    if (file.type !== 'application/pdf') {
+      alert('Please upload a PDF file');
+      e.target.value = '';
+      return;
     }
-  };
+    
+    // 10MB limit (10 * 1024 * 1024 = 10485760 bytes)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      const fileSizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+      alert(`File size must be less than 10MB. Current file size: ${fileSizeInMB}MB`);
+      e.target.value = '';
+      return;
+    }
+    
+    setEditPdfFile(file);
+    setEditFormData(prev => ({ ...prev, resumePdf: file }));
+  }
+};
 
 // Validate edit form
 const validateEditForm = async () => {
@@ -1313,27 +1315,29 @@ const handleSendEmail = (email, e) => {
     window.open(`https://wa.me/${mobile.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
-  // Handle PDF file upload
-  const handlePdfUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.type !== 'application/pdf') {
-        alert('Please upload a PDF file');
-        e.target.value = '';
-        return;
-      }
-      
-      const maxSize = 100 * 1024;
-      if (file.size > maxSize) {
-        alert(`File size must be less than 100KB. Current file size: ${(file.size / 1024).toFixed(2)}KB`);
-        e.target.value = '';
-        return;
-      }
-      
-      setPdfFile(file);
-      setNewProfile(prev => ({ ...prev, resumePdf: file }));
+ // Handle PDF file upload with 10MB limit
+const handlePdfUpload = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    if (file.type !== 'application/pdf') {
+      alert('Please upload a PDF file');
+      e.target.value = '';
+      return;
     }
-  };
+    
+    // 10MB limit (10 * 1024 * 1024 = 10485760 bytes)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      const fileSizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+      alert(`File size must be less than 10MB. Current file size: ${fileSizeInMB}MB`);
+      e.target.value = '';
+      return;
+    }
+    
+    setPdfFile(file);
+    setNewProfile(prev => ({ ...prev, resumePdf: file }));
+  }
+};
 
   // Handle add skill input change with suggestions
   const handleAddSkillInputChange = (e) => {
