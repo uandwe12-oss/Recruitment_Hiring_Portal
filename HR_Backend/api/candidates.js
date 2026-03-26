@@ -233,8 +233,8 @@ const toNumber = (value) => {
 
 router.use((req, res, next) => {
   res.header(
-    'Access-Control-Allow-Origin',
-    'http://localhost:5173'
+  'http://localhost:5173',
+  'https://myuandwe.vercel.app'
   );
 
   res.header(
