@@ -13,6 +13,54 @@ const toNumber = (value) => {
   return value;
 };
 
+
+/**
+ * =================================================
+ * ZONE STATUS LIST - Only these 4 statuses create/update zone entries
+ * =================================================
+ */
+const ZONE_STATUSES = [
+  'Client Interview Reject',
+  'Client Screening Reject', 
+  'Screening Reject',
+  'Interview Reject'
+];
+
+const isZoneStatus = (status) => {
+  return ZONE_STATUSES.includes(status);
+};
+
+/**
+ * Helper function to delete zone entry
+ */
+const deleteZoneEntry = async (candidateId, clientName) => {
+  const driver = getDriver();
+  const session = driver.session();
+  
+  try {
+    const result = await session.run(`
+      MATCH (z:Zone {candidateId: $candidateId, clientName: $clientName})
+      DELETE z
+      RETURN count(z) as deletedCount
+    `, {
+      candidateId: parseInt(candidateId),
+      clientName: clientName
+    });
+    
+    const deletedCount = toNumber(result.records[0].get('deletedCount'));
+    if (deletedCount > 0) {
+      console.log(`🗑️ Deleted zone entry for candidate ${candidateId} (client: ${clientName})`);
+    }
+    return deletedCount;
+  } catch (err) {
+    console.error("❌ Error deleting zone entry:", err);
+    throw err;
+  } finally {
+    await session.close();
+  }
+};
+
+
 /**
  * =================================================
  * AUTO CLEANUP FUNCTION - Runs automatically
@@ -461,6 +509,152 @@ router.post("/add", async (req, res) => {
     await session.close();
   }
 });
+
+/**
+ * POST /api/zone/manage
+ * Manage zone entry based on candidate status
+ * - If status is one of the 4 rejection types: ADD/UPDATE zone entry
+ * - If status is anything else: DELETE zone entry if exists
+ */
+router.post("/manage", async (req, res) => {
+  const { candidateId, clientName, demandId, status, reason, rejectedBy } = req.body;
+  
+  console.log(`\n📡 POST /api/zone/manage - Processing candidate ${candidateId} for client: ${clientName}`);
+  console.log(`   Status: ${status}`);
+  
+  if (!candidateId || !clientName) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "candidateId and clientName are required" 
+    });
+  }
+  
+  const driver = getDriver();
+  const session = driver.session();
+  
+  try {
+    // Check if this is a zone-status (one of the 4 rejection types)
+    if (isZoneStatus(status)) {
+      console.log(`✅ Status "${status}" is a zone status - Adding/Updating zone entry`);
+      
+      // Add or update zone entry
+      const now = new Date();
+      const expiryDate = new Date(now);
+      expiryDate.setMonth(expiryDate.getMonth() + 6);
+      
+      // Check if candidate already has zone entry for this client
+      const existingCheck = await session.run(`
+        MATCH (z:Zone {candidateId: $candidateId, clientName: $clientName})
+        RETURN z
+        ORDER BY z.createdAt DESC
+        LIMIT 1
+      `, { 
+        candidateId: parseInt(candidateId), 
+        clientName: clientName 
+      });
+      
+      if (existingCheck.records.length > 0) {
+        // UPDATE existing entry
+        const existingZone = existingCheck.records[0].get('z').properties;
+        
+        const previousRejection = JSON.stringify({
+          demandId: toNumber(existingZone.demandId),
+          status: existingZone.rejectedStatus,
+          rejectedAt: existingZone.rejectedAt,
+          expiryDate: existingZone.expiryDate,
+          reason: existingZone.reason
+        });
+        
+        await session.run(`
+          MATCH (z:Zone {candidateId: $candidateId, clientName: $clientName})
+          SET z.demandId = $demandId,
+              z.rejectedStatus = $status,
+              z.reason = $reason,
+              z.rejectedBy = $rejectedBy,
+              z.rejectedAt = $rejectedAt,
+              z.expiryDate = $expiryDate,
+              z.updatedAt = $updatedAt,
+              z.previousRejection = $previousRejection
+        `, {
+          candidateId: parseInt(candidateId),
+          clientName: clientName,
+          demandId: demandId ? parseInt(demandId) : null,
+          status: status,
+          reason: reason || `Rejected with status: ${status}`,
+          rejectedBy: rejectedBy || 'Unknown',
+          rejectedAt: now.toISOString(),
+          expiryDate: expiryDate.toISOString(),
+          updatedAt: now.toISOString(),
+          previousRejection: previousRejection
+        });
+        
+        res.json({
+          success: true,
+          action: 'updated',
+          message: `Zone entry updated for candidate ${candidateId}`
+        });
+      } else {
+        // CREATE new entry
+        await session.run(`
+          CREATE (z:Zone {
+            candidateId: $candidateId,
+            demandId: $demandId,
+            clientName: $clientName,
+            rejectedStatus: $status,
+            reason: $reason,
+            rejectedBy: $rejectedBy,
+            rejectedAt: $rejectedAt,
+            expiryDate: $expiryDate,
+            createdAt: $createdAt,
+            updatedAt: $createdAt
+          })
+        `, {
+          candidateId: parseInt(candidateId),
+          demandId: demandId ? parseInt(demandId) : null,
+          clientName: clientName,
+          status: status,
+          reason: reason || `Rejected with status: ${status}`,
+          rejectedBy: rejectedBy || 'Unknown',
+          rejectedAt: now.toISOString(),
+          expiryDate: expiryDate.toISOString(),
+          createdAt: now.toISOString()
+        });
+        
+        res.json({
+          success: true,
+          action: 'created',
+          message: `Zone entry created for candidate ${candidateId}`
+        });
+      }
+      
+    } else {
+      // NOT a zone status - DELETE zone entry if exists
+      console.log(`❌ Status "${status}" is NOT a zone status - Deleting zone entry if exists`);
+      
+      const deletedCount = await deleteZoneEntry(candidateId, clientName);
+      
+      res.json({
+        success: true,
+        action: deletedCount > 0 ? 'deleted' : 'none',
+        message: deletedCount > 0 
+          ? `Zone entry deleted for candidate ${candidateId}` 
+          : `No zone entry found for candidate ${candidateId}`
+      });
+    }
+    
+  } catch (err) {
+    console.error("❌ Error managing zone entry:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to manage zone entry",
+      error: err.message
+    });
+  } finally {
+    await session.close();
+  }
+});
+
+
 
 /**
  * GET /api/zone/history/:candidateId/:clientName
