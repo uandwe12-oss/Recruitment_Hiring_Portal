@@ -231,11 +231,17 @@ const toNumber = (value) => {
   return value;
 };
 
-router.use((req, res, next) => {
-  res.header(
+const allowedOrigins = [
   'http://localhost:5173',
   'https://myuandwe.vercel.app'
-  );
+];
+
+router.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
 
   res.header(
     'Access-Control-Allow-Headers',
@@ -600,37 +606,47 @@ router.get("/", async (req, res) => {
  *         description: Successful response
  */
 router.get("/all", async (req, res) => {
-  console.log("\n📡 GET /api/candidates/all - Fetching ALL candidate profiles");
-  
-  const session = driver.session();
-  
-  try {
-    const result = await session.run("MATCH (c:Candidate_Profile) RETURN c ORDER BY c.Can_ID DESC");
+  console.log("🔥 /all API HIT");
 
-    console.log(`📊 Found ${result.records.length} candidate profiles`);
-    
-    const profiles = result.records.map(r => {
-      const profile = r.get("c").properties;
-      return formatProfileForResponse(profile);
+  if (!driver) {
+    console.error("❌ Driver is not initialized");
+    return res.status(500).json({
+      success: false,
+      message: "Database driver not initialized"
     });
+  }
+
+  const session = driver.session();
+
+  try {
+    const result = await session.run(
+      "MATCH (c:Candidate_Profile) RETURN c ORDER BY c.Can_ID DESC"
+    );
+
+    const profiles = result.records.map(r => {
+      if (!r.get("c")) return null; // safety
+      return formatProfileForResponse(r.get("c").properties);
+    }).filter(Boolean);
 
     res.json({
       success: true,
       data: profiles,
       count: profiles.length
     });
+
   } catch (err) {
-    console.error("❌ Error fetching candidate profiles:", err.message);
-    res.status(500).json({ 
-      success: false, 
+    console.error("❌ FULL ERROR:", err); // 🔥 IMPORTANT
+
+    res.status(500).json({
+      success: false,
       message: "Failed to fetch candidate profiles",
-      error: err.message 
+      error: err.message,
+      stack: err.stack // optional for debugging
     });
   } finally {
     await session.close();
   }
 });
-
 /**
  * @swagger
  * /api/candidates/next-id:
@@ -1534,7 +1550,7 @@ router.get("/check-zone/:candidateId/:clientName", async (req, res) => {
   
   console.log(`\n📡 GET /api/candidates/check-zone/${candidateId}/${clientName}`);
   
-  const driver = getDriver();
+  
   const session = driver.session();
   
   try {
