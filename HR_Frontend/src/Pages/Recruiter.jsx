@@ -50,6 +50,7 @@ const Recruiter = ({ user }) => {
   
   const [searchParams] = useSearchParams(); // Add this hook
   const [searchTerm, setSearchTerm] = useState("");
+   const [candidateClientStatus, setCandidateClientStatus] = useState({}); 
   const [selectedSkill, setSelectedSkill] = useState("All");
   const [selectedCandidates, setSelectedCandidates] = useState([]);
   const [showAddProfile, setShowAddProfile] = useState(false);
@@ -2206,6 +2207,29 @@ useEffect(() => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredCandidates.slice(indexOfFirstItem, indexOfLastItem);
+
+     useEffect(() => {
+    const fetchAllClientStatuses = async () => {
+      const currentClient = searchParams.get('clientName');
+      
+      if (!currentClient || currentItems.length === 0) return;
+      
+      const statusMap = {};
+      
+      for (const candidate of currentItems) {
+        if (candidate.id) {
+          const status = await fetchCandidateStatusForClient(candidate.id, currentClient);
+          if (status && status.isSelected) {
+            statusMap[candidate.id] = status;
+          }
+        }
+      }
+      
+      setCandidateClientStatus(statusMap);
+    };
+    
+    fetchAllClientStatuses();
+  }, [currentItems, searchParams]);
 
   // Pagination logic for selected candidates view
   const selectedTotalPages = Math.ceil(selectedCandidates.length / itemsPerPage);
