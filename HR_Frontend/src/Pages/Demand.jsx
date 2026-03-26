@@ -140,7 +140,7 @@ useEffect(() => {
   };
 const openStatusEditModal = (candidate) => {
   setSelectedStatusCandidate(candidate);
-  setSelectedNewStatus(candidate.status);  // ← This sets it to the current status, not what you want
+  setSelectedNewStatus(''); // Don't pre-select current status
   setStatusReason('');
   setShowStatusEditModal(true);
 };
@@ -812,11 +812,19 @@ const handleViewCandidates = (demand) => {
     });
   };
 
-  // New function to update candidate status
 const updateCandidateStatus = async (newStatus) => {
-  if (!newStatus || !statusReason.trim() || !selectedStatusCandidate) return;
-  
   console.log("🔍 updateCandidateStatus called with status:", newStatus);
+  console.log("🔍 Status reason:", statusReason);
+  console.log("🔍 Selected candidate:", selectedStatusCandidate);
+  
+  if (!newStatus || !statusReason.trim() || !selectedStatusCandidate) {
+    console.log("❌ Missing required fields:", {
+      newStatus: !!newStatus,
+      reason: !!statusReason.trim(),
+      candidate: !!selectedStatusCandidate
+    });
+    return;
+  }
   
   try {
     setStatusLoading(true);
@@ -1651,6 +1659,7 @@ const updateCandidateStatus = async (newStatus) => {
   </div>
 )}
 
+
 {/* Status Edit Modal */}
 {showStatusEditModal && selectedStatusCandidate && (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
@@ -1679,20 +1688,19 @@ const updateCandidateStatus = async (newStatus) => {
         </p>
         
         <div className="space-y-4">
-          {/* Status Selection - Using local state with useState inside modal */}
+          {/* Status Selection */}
           <div>
             <label className="block text-sm font-medium mb-2">Select New Status</label>
-           <select
-  value={selectedNewStatus}
-  onChange={(e) => {
-    const newValue = e.target.value;
-    console.log("📝 Dropdown changed to:", newValue);
-    setSelectedNewStatus(newValue);
-                // Also store in localStorage for debugging
-                localStorage.setItem('temp_selected_status', newValue);
+            <select
+              value={selectedNewStatus}
+              onChange={(e) => {
+                const newValue = e.target.value;
+                console.log("📝 Dropdown changed to:", newValue);
+                setSelectedNewStatus(newValue);
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
+              <option value="" disabled>-- Select Status --</option>
               <option value="Pending Screening">Pending Screening</option>
               <option value="Pending Interview">Pending Interview</option>
               <option value="Pending Client Screening">Pending Client Screening</option>
@@ -1735,32 +1743,36 @@ const updateCandidateStatus = async (newStatus) => {
             Cancel
           </button>
           <button
-  onClick={() => {
-    if (selectedNewStatus && statusReason.trim()) {
-      updateCandidateStatus(selectedNewStatus);
-    } else {
-      alert('Please select a status and provide a reason');
-    }
-  }}
-  disabled={!statusReason.trim()}
-  className={`px-6 py-2 rounded-lg transition flex items-center gap-2 ${
-    !statusReason.trim()
-      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-      : 'bg-blue-600 text-white hover:bg-blue-700'
-  }`}
->
-  {statusLoading ? (
-    <>
-      <Loader size={16} className="animate-spin" />
-      Updating...
-    </>
-  ) : (
-    <>
-      <CheckCircle size={16} />
-      Update Status
-    </>
-  )}
-</button>
+            onClick={() => {
+              console.log("🔍 Update button clicked - selectedNewStatus:", selectedNewStatus);
+              console.log("🔍 Status reason:", statusReason);
+              
+              if (selectedNewStatus && statusReason.trim()) {
+                // Make sure we're passing the exact status string
+                updateCandidateStatus(selectedNewStatus);
+              } else {
+                alert('Please select a status and provide a reason');
+              }
+            }}
+            disabled={!selectedNewStatus || !statusReason.trim()}
+            className={`px-6 py-2 rounded-lg transition flex items-center gap-2 ${
+              !selectedNewStatus || !statusReason.trim()
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {statusLoading ? (
+              <>
+                <Loader size={16} className="animate-spin" />
+                Updating...
+              </>
+            ) : (
+              <>
+                <CheckCircle size={16} />
+                Update Status
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
