@@ -751,67 +751,80 @@
       });
     };
 
-  const updateCandidateStatus = async (newStatus) => {
-    console.log("🔍 updateCandidateStatus called with status:", newStatus);
-    console.log("🔍 Status reason:", statusReason);
-    console.log("🔍 Selected candidate:", selectedStatusCandidate);
+const updateCandidateStatus = async (newStatus) => {
+  console.log("🔍 updateCandidateStatus called with status:", newStatus);
+  console.log("🔍 Status reason:", statusReason);
+  console.log("🔍 Selected candidate:", selectedStatusCandidate);
+  
+  if (!newStatus || !statusReason.trim() || !selectedStatusCandidate) {
+    console.log("❌ Missing required fields:", {
+      newStatus: !!newStatus,
+      reason: !!statusReason.trim(),
+      candidate: !!selectedStatusCandidate
+    });
+    return;
+  }
+  
+  // ✅ ADD THIS - Define final statuses that should be removed from list
+  const finalStatuses = [
+    'Offer Decline', 
+    'Interview Reject', 
+    'Client Interview Reject', 
+    'Screening Reject', 
+    'Client Screening Reject'
+  ];
+  
+  try {
+    setStatusLoading(true);
     
-    if (!newStatus || !statusReason.trim() || !selectedStatusCandidate) {
-      console.log("❌ Missing required fields:", {
-        newStatus: !!newStatus,
-        reason: !!statusReason.trim(),
-        candidate: !!selectedStatusCandidate
-      });
-      return;
-    }
+    const user = JSON.parse(localStorage.getItem("user")) || {};
+    const changedBy = user.name || user.username || 'Unknown';
     
-    try {
-      setStatusLoading(true);
-      
-      const user = JSON.parse(localStorage.getItem("user")) || {};
-      const changedBy = user.name || user.username || 'Unknown';
-      
-      const requestBody = {
-        candidateId: selectedStatusCandidate.id,
-        demandId: selectedDemandId,
-        status: newStatus,
-        reason: statusReason,
-        changedBy: changedBy
-      };
-      
-      console.log("Sending PUT request with body:", requestBody);
-      
-      const response = await axios.put(`https://myuandwe-bg.vercel.app/api/selected-candidates/status`, requestBody);
+    const requestBody = {
+      candidateId: selectedStatusCandidate.id,
+      demandId: selectedDemandId,
+      status: newStatus,
+      reason: statusReason,
+      changedBy: changedBy
+    };
+    
+    console.log("Sending PUT request with body:", requestBody);
+    
+    const response = await axios.put(`https://myuandwe-bg.vercel.app/api/selected-candidates/status`, requestBody);
 
-      console.log("Response from server:", response.data);
+    console.log("Response from server:", response.data);
 
-      if (response.data.success) {
-        console.log("✅ Status update successful, refreshing candidates...");
-        
-        const updatedCandidates = await fetchSelectedCandidates(selectedDemandId);
-        setCurrentSelectedCandidates(updatedCandidates);
-        setSelectedCandidates(prev => ({
-          ...prev,
-          [selectedDemandId]: updatedCandidates
-        }));
-        
-        setShowStatusEditModal(false);
-        setSelectedStatusCandidate(null);
-        setStatusReason('');
-        setSelectedNewStatus('');
-        
-        alert(`Status updated to ${newStatus}!`);
-      } else {
-        console.error("❌ Update failed - response success false");
-        alert('Failed to update status');
-      }
-    } catch (err) {
-      console.error('❌ Error updating status:', err);
-      alert('Failed to update status: ' + (err.response?.data?.message || err.message));
-    } finally {
-      setStatusLoading(false);
+    if (response.data.success) {
+      console.log("✅ Status update successful, refreshing candidates...");
+      
+      const updatedCandidates = await fetchSelectedCandidates(selectedDemandId);
+      
+      // ✅ ADD THIS - Filter out candidates with final statuses before displaying
+      const filteredCandidates = updatedCandidates.filter(c => !finalStatuses.includes(c.status));
+      
+      setCurrentSelectedCandidates(filteredCandidates);
+      setSelectedCandidates(prev => ({
+        ...prev,
+        [selectedDemandId]: filteredCandidates
+      }));
+      
+      setShowStatusEditModal(false);
+      setSelectedStatusCandidate(null);
+      setStatusReason('');
+      setSelectedNewStatus('');
+      
+      alert(`Status updated to ${newStatus}!`);
+    } else {
+      console.error("❌ Update failed - response success false");
+      alert('Failed to update status');
     }
-  };
+  } catch (err) {
+    console.error('❌ Error updating status:', err);
+    alert('Failed to update status: ' + (err.response?.data?.message || err.message));
+  } finally {
+    setStatusLoading(false);
+  }
+};
 
     return (
       <div
