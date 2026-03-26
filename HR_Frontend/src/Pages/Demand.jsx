@@ -811,66 +811,80 @@ const Demand = () => {
     });
   };
 
-  const updateCandidateStatus = async (newStatus) => {
-    console.log("🔍 updateCandidateStatus called with status:", newStatus);
-    console.log("🔍 Status reason:", statusReason);
-    console.log("🔍 Selected candidate:", selectedStatusCandidate);
+const updateCandidateStatus = async (newStatus) => {
+  console.log("🔍 updateCandidateStatus called with status:", newStatus);
+  console.log("🔍 Status reason:", statusReason);
+  console.log("🔍 Selected candidate:", selectedStatusCandidate);
 
-    if (!newStatus || !statusReason.trim() || !selectedStatusCandidate) {
-      console.log("❌ Missing required fields:", {
-        newStatus: !!newStatus,
-        reason: !!statusReason.trim(),
-        candidate: !!selectedStatusCandidate
-      });
-      return;
-    }
+  if (!newStatus || !statusReason.trim() || !selectedStatusCandidate) {
+    console.log("❌ Missing required fields");
+    return;
+  }
 
-    try {
-      setStatusLoading(true);
+  try {
+    setStatusLoading(true);
 
-      const user = JSON.parse(localStorage.getItem("user")) || {};
-      const changedBy = user.name || user.username || 'Unknown';
+    const user = JSON.parse(localStorage.getItem("user")) || {};
+    const changedBy = user.name || user.username || 'Unknown';
 
-      const requestBody = {
+    // STEP 1: Update candidate status
+    const statusRequest = {
+      candidateId: selectedStatusCandidate.id,
+      demandId: selectedDemandId,
+      status: newStatus,
+      reason: statusReason,
+      changedBy: changedBy
+    };
+
+    console.log("📤 Sending status update:", statusRequest);
+    
+    const statusResponse = await axios.put(`http://localhost:5000/api/selected-candidates/status`, statusRequest);
+
+    if (statusResponse.data.success) {
+      console.log("✅ Status updated successfully");
+      
+      // STEP 2: Manage zone entry based on the new status
+      const zoneRequest = {
         candidateId: selectedStatusCandidate.id,
+        clientName: selectedDemandDetails?.clientName,
         demandId: selectedDemandId,
         status: newStatus,
         reason: statusReason,
-        changedBy: changedBy
+        rejectedBy: changedBy
       };
+      
+      console.log("📤 Managing zone entry:", zoneRequest);
+      
+      await axios.post(`http://localhost:5000/api/zone/manage`, zoneRequest);
+      
+      // STEP 3: Refresh the candidates list
+      const updatedCandidates = await fetchSelectedCandidates(selectedDemandId);
+      setCurrentSelectedCandidates(updatedCandidates);
+      setSelectedCandidates(prev => ({
+        ...prev,
+        [selectedDemandId]: updatedCandidates
+      }));
 
-      console.log("Sending PUT request with body:", requestBody);
-
-      const response = await axios.put(`https://myuandwe-bg.vercel.app/api/selected-candidates/status`, requestBody);
-
-      console.log("Response from server:", response.data);
-
-      if (response.data.success) {
-        console.log("✅ Status update successful, refreshing candidates...");
-
-        const updatedCandidates = await fetchSelectedCandidates(selectedDemandId);
-        setCurrentSelectedCandidates(updatedCandidates);
-        setSelectedCandidates(prev => ({
-          ...prev,
-          [selectedDemandId]: updatedCandidates
-        }));
-
-        setShowStatusEditModal(false);
-        setSelectedStatusCandidate(null);
-        setStatusReason('');
-        setSelectedNewStatus('');
-
-      } else {
-        console.error("❌ Update failed - response success false");
-
-      }
-    } catch (err) {
-      console.error('❌ Error updating status:', err);
-      alert('Failed to update status: ' + (err.response?.data?.message || err.message));
-    } finally {
-      setStatusLoading(false);
+      // Close modal and reset states
+      setShowStatusEditModal(false);
+      setSelectedStatusCandidate(null);
+      setStatusReason('');
+      setSelectedNewStatus('');
+      
+      // Show success message
+      alert(`Candidate status updated to "${newStatus}"!`);
+      
+    } else {
+      console.error("❌ Status update failed");
+      alert('Failed to update status');
     }
-  };
+  } catch (err) {
+    console.error('❌ Error updating status:', err);
+    alert('Failed to update status: ' + (err.response?.data?.message || err.message));
+  } finally {
+    setStatusLoading(false);
+  }
+};
 
   return (
     <div
