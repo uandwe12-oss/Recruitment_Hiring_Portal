@@ -59,34 +59,81 @@ const toNumber = (value) => {
 };
 
 /**
+
  * Get all candidates in Zone for a specific client
+
  */
+
 const getCandidatesInZone = async (clientName) => {
+
   const session = driver.session();
-  
+
+ 
+
   try {
+
     console.log(`🔍 Searching for Zone entries for client: ${clientName}`);
-    
-    // Convert expiryDate string to datetime for comparison
+
+   
+
+    // Get all zone entries for this client first
+
     const result = await session.run(`
+
       MATCH (z:Zone {clientName: $clientName})
-      WHERE datetime(z.expiryDate) > datetime()
-      RETURN collect(z.candidateId) as candidateIds
+
+      RETURN z.candidateId as candidateId, z.expiryDate as expiryDate
+
     `, { clientName });
-    
-    const candidateIds = result.records[0].get('candidateIds');
-    const zoneCandidateIds = candidateIds.map(id => toNumber(id));
-    
-    console.log(`✅ Found ${zoneCandidateIds.length} active candidates in zone for client: ${clientName}`);
-    console.log(`   Candidate IDs: ${zoneCandidateIds.join(', ')}`);
-    
-    return zoneCandidateIds;
+
+   
+
+    const currentDateTime = new Date();
+
+    const activeCandidateIds = [];
+
+   
+
+    // Filter in JavaScript
+
+    result.records.forEach(record => {
+
+      const expiryDateStr = record.get('expiryDate');
+
+      const expiryDate = new Date(expiryDateStr);
+
+     
+
+      if (expiryDate > currentDateTime) {
+
+        const candidateId = toNumber(record.get('candidateId'));
+
+        activeCandidateIds.push(candidateId);
+
+      }
+
+    });
+
+   
+
+    console.log(`✅ Found ${activeCandidateIds.length} active candidates in zone for client: ${clientName}`);
+
+   
+
+    return activeCandidateIds;
+
   } catch (err) {
+
     console.error("❌ Error getting candidates in zone:", err);
+
     return [];
+
   } finally {
+
     await session.close();
+
   }
+
 };
 
 router.use((req, res, next) => {
