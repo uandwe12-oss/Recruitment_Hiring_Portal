@@ -232,6 +232,7 @@ const toNumber = (value) => {
 };
 
 const allowedOrigins = [
+  'http://localhost:5173',
   'https://myuandwe.vercel.app'
 ];
 
@@ -940,6 +941,7 @@ router.get("/check-mobile/:mobile", async (req, res) => {
     await session.close();
   }
 });
+
 // ============================================
 // CANDIDATE STATUS ROUTES
 // ============================================
