@@ -232,7 +232,6 @@ const toNumber = (value) => {
 };
 
 const allowedOrigins = [
-  'http://localhost:5173',
   'https://myuandwe.vercel.app'
 ];
 
