@@ -67,7 +67,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: "https://myuandwe-bg.vercel.app"
+        url: "http://localhost:5000"
       }
     ]
   },
@@ -102,5 +102,4 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
-
 
