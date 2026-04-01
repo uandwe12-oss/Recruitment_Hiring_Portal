@@ -102,7 +102,7 @@ useEffect(() => {
 
   const fetchDemands = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/demand");
+      const response = await fetch("https://myuandwe-bg.vercel.app/api/demand");
       if (!response.ok) throw new Error("Failed to fetch demands");
       const data = await response.json();
       setDemands(data);
