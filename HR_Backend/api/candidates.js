@@ -941,6 +941,215 @@ router.get("/check-mobile/:mobile", async (req, res) => {
     await session.close();
   }
 });
+// ============================================
+// CANDIDATE STATUS ROUTES
+// ============================================
+
+/**
+ * GET /api/candidates/:candidateId/status
+ * Get overall candidate status (for all clients)
+ */
+router.get("/:candidateId/status", async (req, res) => {
+  const { candidateId } = req.params;
+  
+  console.log(`\n📡 GET /api/candidates/${candidateId}/status`);
+  
+  const session = driver.session();
+  
+  try {
+    // Get candidate's in-progress status
+    const result = await session.run(
+      "MATCH (c:Candidate_Profile {Can_ID: $id}) RETURN c.isInProgress as isInProgress, c.lastStatusUpdate as lastUpdate",
+      { id: parseInt(candidateId) }
+    );
+    
+    if (result.records.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Candidate not found"
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        candidateId: parseInt(candidateId),
+        isInProgress: result.records[0].get('isInProgress') || false,
+        lastStatusUpdate: result.records[0].get('lastUpdate')
+      }
+    });
+    
+  } catch (err) {
+    console.error(`❌ Error fetching candidate status:`, err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch candidate status",
+      error: err.message
+    });
+  } finally {
+    await session.close();
+  }
+});
+
+/**
+ * GET /api/candidates/:candidateId/status-for-client/:clientName
+ * Get candidate's status for a specific client
+ */
+router.get("/:candidateId/status-for-client/:clientName", async (req, res) => {
+  const { candidateId, clientName } = req.params;
+  
+  console.log(`\n📡 GET /api/candidates/${candidateId}/status-for-client/${clientName}`);
+  
+  const session = driver.session();
+  
+  try {
+    // Check zone first (rejection status)
+    const zoneResult = await session.run(`
+      MATCH (z:Zone {candidateId: $candidateId, clientName: $clientName})
+      WHERE z.expiryDate > datetime()
+      RETURN z
+    `, {
+      candidateId: parseInt(candidateId),
+      clientName: clientName
+    });
+    
+    if (zoneResult.records.length > 0) {
+      const zoneEntry = zoneResult.records[0].get('z').properties;
+      const expiryDate = new Date(zoneEntry.expiryDate);
+      const now = new Date();
+      const daysRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+      
+      return res.json({
+        success: true,
+        status: "Rejected",
+        statusType: "rejected",
+        details: {
+          reason: zoneEntry.reason || "Not specified",
+          rejectedAt: zoneEntry.rejectedAt,
+          expiryDate: zoneEntry.expiryDate,
+          daysRemaining: daysRemaining
+        }
+      });
+    }
+    
+    // Check if candidate is in progress for this client
+    const candidateResult = await session.run(`
+      MATCH (c:Candidate_Profile {Can_ID: $candidateId})
+      WHERE c.clientName = $clientName AND c.isInProgress = true
+      RETURN c
+    `, {
+      candidateId: parseInt(candidateId),
+      clientName: clientName
+    });
+    
+    if (candidateResult.records.length > 0) {
+      return res.json({
+        success: true,
+        status: "In Progress",
+        statusType: "in-progress",
+        details: {
+          lastUpdate: candidateResult.records[0].get('c').properties.lastStatusUpdate
+        }
+      });
+    }
+    
+    // Default status
+    res.json({
+      success: true,
+      status: "Not Started",
+      statusType: "not-started",
+      message: "Candidate is available for this client"
+    });
+    
+  } catch (err) {
+    console.error(`❌ Error fetching client-specific status:`, err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch candidate status",
+      error: err.message
+    });
+  } finally {
+    await session.close();
+  }
+});
+
+/**
+ * PUT /api/candidates/:candidateId/status-for-client/:clientName
+ * Update candidate's status for a specific client
+ */
+router.put("/:candidateId/status-for-client/:clientName", async (req, res) => {
+  const { candidateId, clientName } = req.params;
+  const { status, reason } = req.body;
+  
+  console.log(`\n📡 PUT /api/candidates/${candidateId}/status-for-client/${clientName}`);
+  console.log(`   New status: ${status}`);
+  
+  const session = driver.session();
+  
+  try {
+    if (status === "rejected") {
+      // Add to zone for 90 days
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 90);
+      
+      await session.run(`
+        CREATE (z:Zone {
+          candidateId: $candidateId,
+          clientName: $clientName,
+          rejectedStatus: $status,
+          reason: $reason,
+          rejectedAt: datetime(),
+          expiryDate: datetime($expiryDate)
+        })
+      `, {
+        candidateId: parseInt(candidateId),
+        clientName: clientName,
+        status: status,
+        reason: reason || "Rejected by recruiter",
+        expiryDate: expiryDate.toISOString()
+      });
+      
+      res.json({
+        success: true,
+        message: `Candidate ${candidateId} rejected for ${clientName}. In zone until ${expiryDate.toISOString()}`
+      });
+      
+    } else if (status === "in-progress") {
+      // Update candidate's in-progress status
+      await session.run(`
+        MATCH (c:Candidate_Profile {Can_ID: $candidateId})
+        SET c.isInProgress = true,
+            c.lastStatusUpdate = datetime(),
+            c.clientName = $clientName
+        RETURN c
+      `, {
+        candidateId: parseInt(candidateId),
+        clientName: clientName
+      });
+      
+      res.json({
+        success: true,
+        message: `Candidate ${candidateId} marked as in progress for ${clientName}`
+      });
+      
+    } else {
+      res.status(400).json({
+        success: false,
+        message: "Invalid status. Must be 'rejected' or 'in-progress'"
+      });
+    }
+    
+  } catch (err) {
+    console.error(`❌ Error updating candidate status:`, err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update candidate status",
+      error: err.message
+    });
+  } finally {
+    await session.close();
+  }
+});
 
 /**
  * @swagger
@@ -1062,6 +1271,8 @@ router.post("/", upload.single('resume'), async (req, res) => {
         message: "Candidate with this mobile number already exists"
       });
     }
+
+
 
     // ✅ FIXED: Get all existing IDs and find next available
     const existingIdsResult = await session.run(
